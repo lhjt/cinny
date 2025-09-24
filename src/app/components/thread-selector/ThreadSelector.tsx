@@ -77,7 +77,7 @@ export function ThreadSelector({ room, senderId, threadDetail, outlined }: Threa
       </Box>
       <Box gap="200" alignItems="Inherit">
         <Text className={css.ThreadRepliesCount} size="L400">
-          {threadDetail.count} Replies
+          {threadDetail.count} {threadDetail.count === 1 ? 'Reply' : 'Replies'}
         </Text>
         <Text size="T200" truncate>
           {/* TODO: date */}
