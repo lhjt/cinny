@@ -1,6 +1,6 @@
 /* eslint-disable react/destructuring-assignment */
 import React, { forwardRef, MouseEventHandler, useMemo, useRef } from 'react';
-import { MatrixEvent, Room } from 'matrix-js-sdk';
+import { IRoomEvent, MatrixEvent, Room } from 'matrix-js-sdk';
 import {
   Avatar,
   Box,
@@ -19,14 +19,11 @@ import {
 import { Opts as LinkifyOpts } from 'linkifyjs';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRoomPinnedEvents } from '../../../hooks/useRoomPinnedEvents';
 import * as css from './ThreadsMenu.css';
 import { SequenceCard } from '../../../components/sequence-card';
-import { useRoomEvent } from '../../../hooks/useRoomEvent';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import {
   AvatarBase,
-  DefaultPlaceholder,
   ImageContent,
   MessageNotDecryptedContent,
   MessageUnsupportedContent,
@@ -41,7 +38,12 @@ import {
 import { UserAvatar } from '../../../components/user-avatar';
 import { getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { getEditedEvent, getMemberAvatarMxc, getMemberDisplayName } from '../../../utils/room';
+import {
+  getEditedEvent,
+  getEventThreadDetail,
+  getMemberAvatarMxc,
+  getMemberDisplayName,
+} from '../../../utils/room';
 import { GetContentCallback, MessageEvent } from '../../../../types/matrix/room';
 import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../../hooks/useSpoilerClickHandler';
@@ -62,36 +64,48 @@ import { Image } from '../../../components/media';
 import { ImageViewer } from '../../../components/image-viewer';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { VirtualTile } from '../../../components/virtualizer';
-import { usePowerLevelsAPI, usePowerLevelsContext } from '../../../hooks/usePowerLevels';
+import { usePowerLevelsContext } from '../../../hooks/usePowerLevels';
 import { ContainerColor } from '../../../styles/ContainerColor.css';
-import {
-  getTagIconSrc,
-  useAccessibleTagColors,
-  usePowerLevelTags,
-} from '../../../hooks/usePowerLevelTags';
+import { usePowerLevelTags } from '../../../hooks/usePowerLevelTags';
 import { useTheme } from '../../../hooks/useTheme';
 import { PowerIcon } from '../../../components/power';
 import colorMXID from '../../../../util/colorMXID';
 import { useIsDirectRoom } from '../../../hooks/useRoom';
+import { useRoomCreators } from '../../../hooks/useRoomCreators';
+import {
+  GetMemberPowerTag,
+  getPowerTagIconSrc,
+  useAccessiblePowerTagColors,
+  useGetMemberPowerTag,
+} from '../../../hooks/useMemberPowerTag';
+import { useRoomCreatorsTag } from '../../../hooks/useRoomCreatorsTag';
+import { useRoomMyThreads } from '../../../hooks/useRoomThreads';
+import { ThreadSelector, ThreadSelectorContainer } from '../../../components/thread-selector';
 
-type ThreadsProps = {
+type ThreadMessageProps = {
   room: Room;
-  eventId: string;
+  event: MatrixEvent;
   renderContent: RenderMatrixEvent<[MatrixEvent, string, GetContentCallback]>;
   onOpen: (roomId: string, eventId: string) => void;
+  getMemberPowerTag: GetMemberPowerTag;
+  accessibleTagColors: Map<string, string>;
+  legacyUsernameColor: boolean;
+  hour24Clock: boolean;
+  dateFormatString: string;
 };
-function Threads({ room, eventId, renderContent, onOpen }: ThreadsProps) {
-  const pinnedEvent = useRoomEvent(room, eventId);
+function ThreadMessage({
+  room,
+  event,
+  renderContent,
+  onOpen,
+  getMemberPowerTag,
+  accessibleTagColors,
+  legacyUsernameColor,
+  hour24Clock,
+  dateFormatString,
+}: ThreadMessageProps) {
   const useAuthentication = useMediaAuthentication();
   const mx = useMatrixClient();
-  const direct = useIsDirectRoom();
-  const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
-
-  const powerLevels = usePowerLevelsContext();
-  const { getPowerLevel } = usePowerLevelsAPI(powerLevels);
-  const [powerLevelTags, getPowerLevelTag] = usePowerLevelTags(room, powerLevels);
-  const theme = useTheme();
-  const accessibleTagColors = useAccessibleTagColors(theme.kind, powerLevelTags);
 
   const handleOpenClick: MouseEventHandler = (evt) => {
     evt.stopPropagation();
@@ -102,36 +116,31 @@ function Threads({ room, eventId, renderContent, onOpen }: ThreadsProps) {
 
   const renderOptions = () => (
     <Box shrink="No" gap="200" alignItems="Center">
-      <Chip data-event-id={eventId} onClick={handleOpenClick} variant="Secondary" radii="Pill">
+      <Chip
+        data-event-id={event.getId()}
+        onClick={handleOpenClick}
+        variant="Secondary"
+        radii="Pill"
+      >
         <Text size="T200">Open</Text>
       </Chip>
     </Box>
   );
 
-  if (pinnedEvent === undefined) return <DefaultPlaceholder variant="Secondary" />;
-  if (pinnedEvent === null)
-    return (
-      <Box gap="300" justifyContent="SpaceBetween" alignItems="Center">
-        <Box>
-          <Text style={{ color: color.Critical.Main }}>Failed to load message!</Text>
-        </Box>
-        {renderOptions()}
-      </Box>
-    );
-
-  const sender = pinnedEvent.getSender()!;
+  const sender = event.getSender()!;
   const displayName = getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender;
   const senderAvatarMxc = getMemberAvatarMxc(room, sender);
-  const getContent = (() => pinnedEvent.getContent()) as GetContentCallback;
+  const getContent = (() => event.getContent()) as GetContentCallback;
 
-  const senderPowerLevel = getPowerLevel(sender);
-  const powerLevelTag = getPowerLevelTag(senderPowerLevel);
-  const tagColor = powerLevelTag?.color ? accessibleTagColors?.get(powerLevelTag.color) : undefined;
-  const tagIconSrc = powerLevelTag?.icon
-    ? getTagIconSrc(mx, useAuthentication, powerLevelTag.icon)
+  const memberPowerTag = getMemberPowerTag(sender);
+  const tagColor = memberPowerTag?.color
+    ? accessibleTagColors?.get(memberPowerTag.color)
+    : undefined;
+  const tagIconSrc = memberPowerTag?.icon
+    ? getPowerTagIconSrc(mx, useAuthentication, memberPowerTag.icon)
     : undefined;
 
-  const usernameColor = legacyUsernameColor || direct ? colorMXID(sender) : tagColor;
+  const usernameColor = legacyUsernameColor ? colorMXID(sender) : tagColor;
 
   return (
     <ModernLayout
@@ -163,23 +172,22 @@ function Threads({ room, eventId, renderContent, onOpen }: ThreadsProps) {
             </Username>
             {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
           </Box>
-          <Time ts={pinnedEvent.getTs()} />
+          <Time ts={event.getTs()} hour24Clock={hour24Clock} dateFormatString={dateFormatString} />
         </Box>
         {renderOptions()}
       </Box>
-      {pinnedEvent.replyEventId && (
+      {event.replyEventId && (
         <Reply
           room={room}
-          replyEventId={pinnedEvent.replyEventId}
-          threadRootId={pinnedEvent.threadRootId}
+          replyEventId={event.replyEventId}
+          threadRootId={event.threadRootId}
           onClick={handleOpenClick}
-          getPowerLevel={getPowerLevel}
-          getPowerLevelTag={getPowerLevelTag}
+          getMemberPowerTag={getMemberPowerTag}
           accessibleTagColors={accessibleTagColors}
           legacyUsernameColor={legacyUsernameColor}
         />
       )}
-      {renderContent(pinnedEvent.getType(), false, pinnedEvent, displayName, getContent)}
+      {renderContent(event.getType(), false, event, displayName, getContent)}
     </ModernLayout>
   );
 }
@@ -191,17 +199,37 @@ type ThreadsMenuProps = {
 export const ThreadsMenu = forwardRef<HTMLDivElement, ThreadsMenuProps>(
   ({ room, requestClose }, ref) => {
     const mx = useMatrixClient();
+    const powerLevels = usePowerLevelsContext();
+    const creators = useRoomCreators(room);
 
-    const pinnedEvents = useRoomPinnedEvents(room);
-    const sortedPinnedEvent = useMemo(() => Array.from(pinnedEvents).reverse(), [pinnedEvents]);
+    const creatorsTag = useRoomCreatorsTag();
+    const powerLevelTags = usePowerLevelTags(room, powerLevels);
+    const getMemberPowerTag = useGetMemberPowerTag(room, creators, powerLevels);
+
+    const theme = useTheme();
+    const accessibleTagColors = useAccessiblePowerTagColors(
+      theme.kind,
+      creatorsTag,
+      powerLevelTags
+    );
+
     const useAuthentication = useMediaAuthentication();
     const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
     const [urlPreview] = useSetting(settingsAtom, 'urlPreview');
+
+    const direct = useIsDirectRoom();
+    const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
+
+    const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
+    const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
+
     const { navigateRoom } = useRoomNavigate();
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    const events = useRoomMyThreads(room);
+
     const virtualizer = useVirtualizer({
-      count: sortedPinnedEvent.length,
+      count: events?.length ?? 0,
       getScrollElement: () => scrollRef.current,
       estimateSize: () => 75,
       overscan: 4,
@@ -239,37 +267,38 @@ export const ThreadsMenu = forwardRef<HTMLDivElement, ThreadsMenuProps>(
             );
           }
 
+          const threadDetail = getEventThreadDetail(event);
+
           return (
-            <RenderMessageContent
-              displayName={displayName}
-              msgType={event.getContent().msgtype ?? ''}
-              ts={event.getTs()}
-              getContent={getContent}
-              edited={!!event.replacingEvent()}
-              mediaAutoLoad={mediaAutoLoad}
-              urlPreview={urlPreview}
-              htmlReactParserOptions={htmlReactParserOptions}
-              linkifyOpts={linkifyOpts}
-              outlineAttachment
-            />
+            <>
+              <RenderMessageContent
+                displayName={displayName}
+                msgType={event.getContent().msgtype ?? ''}
+                ts={event.getTs()}
+                getContent={getContent}
+                edited={!!event.replacingEvent()}
+                mediaAutoLoad={mediaAutoLoad}
+                urlPreview={urlPreview}
+                htmlReactParserOptions={htmlReactParserOptions}
+                linkifyOpts={linkifyOpts}
+                outlineAttachment
+              />
+              {threadDetail && (
+                <ThreadSelectorContainer>
+                  <ThreadSelector
+                    room={room}
+                    senderId={event.getSender()!}
+                    threadDetail={threadDetail}
+                    outlined
+                  />
+                </ThreadSelectorContainer>
+              )}
+            </>
           );
         },
-        [MessageEvent.RoomMessageEncrypted]: (event, displayName) => {
-          const eventId = event.getId()!;
+        [MessageEvent.RoomMessageEncrypted]: (mEvent, displayName) => {
+          const eventId = mEvent.getId()!;
           const evtTimeline = room.getTimelineForEvent(eventId);
-
-          const mEvent = evtTimeline?.getEvents().find((e) => e.getId() === eventId);
-
-          if (!mEvent || !evtTimeline) {
-            return (
-              <Box grow="Yes" direction="Column">
-                <Text size="T400" priority="300">
-                  <code className={customHtmlCss.Code}>{event.getType()}</code>
-                  {' event'}
-                </Text>
-              </Box>
-            );
-          }
 
           return (
             <EncryptedContent mEvent={mEvent}>
@@ -290,7 +319,8 @@ export const ThreadsMenu = forwardRef<HTMLDivElement, ThreadsMenuProps>(
                     />
                   );
                 if (mEvent.getType() === MessageEvent.RoomMessage) {
-                  const editedEvent = getEditedEvent(eventId, mEvent, evtTimeline.getTimelineSet());
+                  const editedEvent =
+                    evtTimeline && getEditedEvent(eventId, mEvent, evtTimeline.getTimelineSet());
                   const getContent = (() =>
                     editedEvent?.getContent()['m.new_content'] ??
                     mEvent.getContent()) as GetContentCallback;
@@ -371,7 +401,7 @@ export const ThreadsMenu = forwardRef<HTMLDivElement, ThreadsMenuProps>(
         <Box grow="Yes" direction="Column">
           <Header className={css.ThreadsMenuHeader} size="500">
             <Box grow="Yes">
-              <Text size="H5">Threads</Text>
+              <Text size="H5">My Threads</Text>
             </Box>
             <Box shrink="No">
               <IconButton size="300" onClick={requestClose} radii="300">
@@ -382,7 +412,7 @@ export const ThreadsMenu = forwardRef<HTMLDivElement, ThreadsMenuProps>(
           <Box grow="Yes">
             <Scroll ref={scrollRef} size="300" hideTrack visibility="Hover">
               <Box className={css.ThreadsMenuContent} direction="Column" gap="100">
-                {sortedPinnedEvent.length > 0 ? (
+                {events && events.length > 0 ? (
                   <div
                     style={{
                       position: 'relative',
@@ -390,8 +420,8 @@ export const ThreadsMenu = forwardRef<HTMLDivElement, ThreadsMenuProps>(
                     }}
                   >
                     {virtualizer.getVirtualItems().map((vItem) => {
-                      const eventId = sortedPinnedEvent[vItem.index];
-                      if (!eventId) return null;
+                      const event = events[vItem.index];
+                      if (!event.getId()) return null;
 
                       return (
                         <VirtualTile
@@ -405,11 +435,16 @@ export const ThreadsMenu = forwardRef<HTMLDivElement, ThreadsMenuProps>(
                             variant="SurfaceVariant"
                             direction="Column"
                           >
-                            <Threads
+                            <ThreadMessage
                               room={room}
-                              eventId={eventId}
+                              event={event}
                               renderContent={renderMatrixEvent}
                               onOpen={handleOpen}
+                              getMemberPowerTag={getMemberPowerTag}
+                              accessibleTagColors={accessibleTagColors}
+                              legacyUsernameColor={legacyUsernameColor || direct}
+                              hour24Clock={hour24Clock}
+                              dateFormatString={dateFormatString}
                             />
                           </SequenceCard>
                         </VirtualTile>
@@ -441,7 +476,7 @@ export const ThreadsMenu = forwardRef<HTMLDivElement, ThreadsMenuProps>(
                         No Threads
                       </Text>
                       <Text size="T400" align="Center">
-                        This room does not have any threads yet.
+                        Threads you are participating in will appear here.
                       </Text>
                     </Box>
                   </Box>
