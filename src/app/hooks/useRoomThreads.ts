@@ -1,29 +1,20 @@
 import { useCallback } from 'react';
-import { Direction, MatrixEvent, Room, ThreadFilterType } from 'matrix-js-sdk';
-import { useMatrixClient } from './useMatrixClient';
-import { AsyncStatus, useAsyncCallbackValue } from './useAsyncCallback';
+import { EventTimelineSet, Room } from 'matrix-js-sdk';
+import { AsyncState, useAsyncCallbackValue } from './useAsyncCallback';
 
-export const useRoomMyThreads = (room: Room): MatrixEvent[] | undefined => {
-  const mx = useMatrixClient();
+export const useRoomMyThreads = (room: Room): AsyncState<EventTimelineSet, Error> => {
+  const [threadsState] = useAsyncCallbackValue<EventTimelineSet, Error>(
+    useCallback(async () => {
+      await room.createThreadsTimelineSets();
+      await room.fetchRoomThreads();
 
-  const [fetchState] = useAsyncCallbackValue(
-    useCallback(
-      () =>
-        mx.createThreadListMessagesRequest(
-          room.roomId,
-          null,
-          30,
-          Direction.Backward,
-          ThreadFilterType.All
-        ),
-      [mx, room]
-    )
+      const timelineSet = room.threadsTimelineSets[0];
+      if (timelineSet === undefined) {
+        throw new Error('Failed to fetch My Threads!');
+      }
+      return timelineSet;
+    }, [room])
   );
 
-  if (fetchState.status === AsyncStatus.Success) {
-    const roomEvents = fetchState.data.chunk;
-    const mEvents = roomEvents.map((event) => new MatrixEvent(event)).reverse();
-    return mEvents;
-  }
-  return undefined;
+  return threadsState;
 };
