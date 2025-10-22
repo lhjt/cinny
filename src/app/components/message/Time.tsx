@@ -9,6 +9,7 @@ export type TimeProps = {
   ts: number;
   hour24Clock: boolean;
   dateFormatString: string;
+  inheritPriority?: boolean;
 };
 
 /**
@@ -24,7 +25,7 @@ export type TimeProps = {
  * @returns {React.ReactElement} A <Text as="time"> element with the formatted date/time.
  */
 export const Time = as<'span', TimeProps & ComponentProps<typeof Text>>(
-  ({ compact, hour24Clock, dateFormatString, ts, className, ...props }, ref) => {
+  ({ compact, hour24Clock, dateFormatString, ts, inheritPriority, className, ...props }, ref) => {
     const formattedTime = timeHourMinute(ts, hour24Clock);
 
     let time = '';
@@ -35,7 +36,7 @@ export const Time = as<'span', TimeProps & ComponentProps<typeof Text>>(
     } else if (yesterday(ts)) {
       time = `Yesterday ${formattedTime}`;
     } else {
-      time = `${timeDayMonYear(ts, dateFormatString)} ${formattedTime}`;
+      time = `${timeDayMonYear(ts, dateFormatString)}, ${formattedTime}`;
     }
 
     return (
@@ -43,7 +44,7 @@ export const Time = as<'span', TimeProps & ComponentProps<typeof Text>>(
         as="time"
         className={classNames(css.Time, className)}
         size="T200"
-        priority="300"
+        priority={inheritPriority ? undefined : '300'}
         {...props}
         ref={ref}
       >
