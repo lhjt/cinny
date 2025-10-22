@@ -1,13 +1,10 @@
-import { Avatar, Box, Icon, Icons, Line, Text } from 'folds';
+import { Box, Icon, Icons, Line, Text } from 'folds';
 import React, { ReactNode } from 'react';
 import classNames from 'classnames';
 import { IThreadBundledRelationship, Room } from 'matrix-js-sdk';
 import * as css from './styles.css';
-import { UserAvatar } from '../../../../components/user-avatar';
-import { getMemberAvatarMxc, getMemberDisplayName } from '../../../../utils/room';
-import { useMatrixClient } from '../../../../hooks/useMatrixClient';
-import { useMediaAuthentication } from '../../../../hooks/useMediaAuthentication';
-import { getMxIdLocalPart, mxcUrlToHttp } from '../../../../utils/matrix';
+import { getMemberDisplayName } from '../../../../utils/room';
+import { getMxIdLocalPart } from '../../../../utils/matrix';
 import { Time } from '../../../../components/message';
 
 export function ThreadSelectorContainer({ children }: { children: ReactNode }) {
@@ -29,13 +26,9 @@ export function ThreadSelector({
   hour24Clock,
   dateFormatString,
 }: ThreadSelectorProps) {
-  const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
-
   const latestEvent = threadDetail.latest_event;
 
   const latestSenderId = latestEvent.sender;
-  const latestSenderAvatarMxc = getMemberAvatarMxc(room, latestSenderId);
   const latestDisplayName =
     getMemberDisplayName(room, latestSenderId) ??
     getMxIdLocalPart(latestSenderId) ??
@@ -51,10 +44,10 @@ export function ThreadSelector({
       alignItems="Center"
       gap="300"
     >
-      <Box className={css.ThreadRepliesCount} shrink="No" alignItems="Center" gap="100">
+      <Box className={css.ThreadRepliesCount} shrink="No" alignItems="Center" gap="200">
         <Icon size="100" src={Icons.Thread} filled />
         <Text size="L400">
-          {threadDetail.count} {threadDetail.count === 1 ? 'Thread Reply' : 'Thread Replies'}
+          {threadDetail.count} {threadDetail.count === 1 ? 'Reply' : 'Replies'}
         </Text>
       </Box>
       {latestSenderId && (
@@ -65,35 +58,15 @@ export function ThreadSelector({
             variant="SurfaceVariant"
           />
           <Box gap="200" alignItems="Inherit">
-            <Box gap="100" alignItems="Inherit">
-              <Avatar size="200" radii="400">
-                <UserAvatar
-                  userId={latestSenderId}
-                  src={
-                    latestSenderAvatarMxc
-                      ? mxcUrlToHttp(
-                          mx,
-                          latestSenderAvatarMxc,
-                          useAuthentication,
-                          48,
-                          48,
-                          'crop'
-                        ) ?? undefined
-                      : undefined
-                  }
-                  alt={latestSenderId}
-                  renderFallback={() => <Icon size="200" src={Icons.User} filled />}
-                />
-              </Avatar>
-            </Box>
             <Text size="T200" truncate>
-              <span>
-                Latest by <strong>{latestDisplayName}</strong> at{' '}
-              </span>
+              <span>Last reply by </span>
+              <b>{latestDisplayName}</b>
+              <span> — </span>
               <Time
                 hour24Clock={hour24Clock}
                 dateFormatString={dateFormatString}
                 ts={latestEventTs}
+                inheritPriority
               />
             </Text>
             <Icon size="100" src={Icons.ChevronRight} />

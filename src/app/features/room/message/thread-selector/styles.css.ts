@@ -9,7 +9,7 @@ export const ThreadSelectorContainer = style({
 export const ThreadSelector = style([
   ContainerColor({ variant: 'SurfaceVariant' }),
   {
-    padding: `${config.space.S200} ${config.space.S300}`,
+    padding: config.space.S200,
     borderRadius: config.radii.R400,
     cursor: 'pointer',
 
