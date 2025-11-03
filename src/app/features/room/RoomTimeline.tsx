@@ -138,6 +138,7 @@ import {
   getTimelinesEventsCount,
   timelineToEventsCount,
 } from './utils';
+import { useThreadSelector } from '../../state/hooks/roomToActiveThread';
 
 const TimelineFloat = as<'div', css.TimelineFloatVariants>(
   ({ position, className, ...props }, ref) => (
@@ -429,6 +430,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const spoilerClickHandler = useSpoilerClickHandler();
   const openUserRoomProfile = useOpenUserRoomProfile();
   const space = useSpaceOptionally();
+  const handleThreadClick = useThreadSelector(room.roomId);
 
   const imagePackRooms: Room[] = useImagePackRooms(room.roomId, roomToParents);
 
@@ -961,6 +963,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     },
     [editor]
   );
+
   const { t } = useTranslation();
 
   const renderMatrixEvent = useMatrixEventRenderer<
@@ -1060,10 +1063,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
               <ThreadSelectorContainer>
                 <ThreadSelector
                   room={room}
+                  threadId={mEventId}
                   threadDetail={threadDetail}
                   hour24Clock={hour24Clock}
                   dateFormatString={dateFormatString}
                   outlined={messageLayout === MessageLayout.Bubble}
+                  onClick={handleThreadClick}
                 />
               </ThreadSelectorContainer>
             )}

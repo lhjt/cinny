@@ -77,7 +77,7 @@ import * as css from './ThreadsMenu.css';
 type ThreadMessageProps = {
   room: Room;
   event: MatrixEvent;
-  renderContent: RenderMatrixEvent<[MatrixEvent, string, GetContentCallback]>;
+  renderContent: RenderMatrixEvent<[string, MatrixEvent, string, GetContentCallback]>;
   onOpen: (roomId: string, eventId: string) => void;
   getMemberPowerTag: GetMemberPowerTag;
   accessibleTagColors: Map<string, string>;
@@ -134,6 +134,10 @@ function ThreadMessage({
 
   const usernameColor = legacyUsernameColor ? colorMXID(sender) : tagColor;
 
+  const mEventId = event.getId();
+
+  if (!mEventId) return null;
+
   return (
     <ModernLayout
       before={
@@ -179,7 +183,7 @@ function ThreadMessage({
           legacyUsernameColor={legacyUsernameColor}
         />
       )}
-      {renderContent(event.getType(), false, event, displayName, getContent)}
+      {renderContent(event.getType(), false, mEventId, event, displayName, getContent)}
     </ModernLayout>
   );
 }
@@ -238,9 +242,11 @@ export function ThreadsTimeline({ timelines, requestClose }: ThreadsTimelineProp
     [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication]
   );
 
-  const renderMatrixEvent = useMatrixEventRenderer<[MatrixEvent, string, GetContentCallback]>(
+  const renderMatrixEvent = useMatrixEventRenderer<
+    [string, MatrixEvent, string, GetContentCallback]
+  >(
     {
-      [MessageEvent.RoomMessage]: (event, displayName, getContent) => {
+      [MessageEvent.RoomMessage]: (eventId, event, displayName, getContent) => {
         if (event.isRedacted()) {
           return <RedactedContent reason={event.getUnsigned().redacted_because?.content.reason} />;
         }
@@ -265,6 +271,7 @@ export function ThreadsTimeline({ timelines, requestClose }: ThreadsTimelineProp
               <ThreadSelectorContainer>
                 <ThreadSelector
                   room={room}
+                  threadId={eventId}
                   threadDetail={threadDetail}
                   outlined
                   hour24Clock={hour24Clock}
@@ -275,8 +282,7 @@ export function ThreadsTimeline({ timelines, requestClose }: ThreadsTimelineProp
           </>
         );
       },
-      [MessageEvent.RoomMessageEncrypted]: (mEvent, displayName) => {
-        const eventId = mEvent.getId()!;
+      [MessageEvent.RoomMessageEncrypted]: (eventId, mEvent, displayName) => {
         const evtTimeline = room.getTimelineForEvent(eventId);
 
         return (
@@ -333,7 +339,7 @@ export function ThreadsTimeline({ timelines, requestClose }: ThreadsTimelineProp
           </EncryptedContent>
         );
       },
-      [MessageEvent.Sticker]: (event, displayName, getContent) => {
+      [MessageEvent.Sticker]: (eventId, event, displayName, getContent) => {
         if (event.isRedacted()) {
           return <RedactedContent reason={event.getUnsigned().redacted_because?.content.reason} />;
         }
@@ -357,6 +363,7 @@ export function ThreadsTimeline({ timelines, requestClose }: ThreadsTimelineProp
               <ThreadSelectorContainer>
                 <ThreadSelector
                   room={room}
+                  threadId={eventId}
                   threadDetail={threadDetail}
                   outlined
                   hour24Clock={hour24Clock}
@@ -369,7 +376,7 @@ export function ThreadsTimeline({ timelines, requestClose }: ThreadsTimelineProp
       },
     },
     undefined,
-    (event) => {
+    (eventId, event) => {
       if (event.isRedacted()) {
         return <RedactedContent reason={event.getUnsigned().redacted_because?.content.reason} />;
       }
