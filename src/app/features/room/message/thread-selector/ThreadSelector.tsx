@@ -13,18 +13,22 @@ export function ThreadSelectorContainer({ children }: { children: ReactNode }) {
 
 type ThreadSelectorProps = {
   room: Room;
+  threadId: string;
   threadDetail: IThreadBundledRelationship;
   outlined?: boolean;
   hour24Clock: boolean;
   dateFormatString: string;
+  onClick?: (threadId: string) => void;
 };
 
 export function ThreadSelector({
   room,
+  threadId,
   threadDetail,
   outlined,
   hour24Clock,
   dateFormatString,
+  onClick,
 }: ThreadSelectorProps) {
   const latestEvent = threadDetail.latest_event;
 
@@ -43,6 +47,7 @@ export function ThreadSelector({
       className={classNames(css.ThreadSelector, outlined && css.ThreadSectorOutlined)}
       alignItems="Center"
       gap="300"
+      onClick={() => onClick?.(threadId)}
     >
       <Box className={css.ThreadRepliesCount} shrink="No" alignItems="Center" gap="200">
         <Icon size="100" src={Icons.Thread} filled />
