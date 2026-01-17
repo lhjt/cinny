@@ -6,11 +6,7 @@ export const RoomInputFrame = style({
 });
 
 export const RoomInputFrameActive = style({
-  selectors: {
-    '&:focus-within': {
-      outline: `2px solid ${color.Primary.ContainerActive}`,
-      outlineOffset: config.space.S100,
-      borderRadius: config.radii.R400,
-    },
-  },
+  outline: `2px solid ${color.Primary.ContainerActive}`,
+  outlineOffset: config.space.S100,
+  borderRadius: config.radii.R400,
 });

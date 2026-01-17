@@ -95,6 +95,7 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
 
   const enterTimelineNav = useCallback(() => {
     setTimelineNavMode(true);
+    // Ensure timeline receives the next keypress for navigation.
     timelineScrollRef.current?.focus();
     requestAnimationFrame(() => {
       timelineScrollRef.current?.focus();

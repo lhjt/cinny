@@ -597,7 +597,7 @@ export function RoomTimeline({
     PAGINATION_LIMIT
   );
 
-  const getScrollElement = useCallback(() => scrollRef.current, []);
+  const getScrollElement = useCallback(() => scrollRef.current, [scrollRef]);
 
   const { getItems, scrollToItem, scrollToElement, observeBackAnchor, observeFrontAnchor } =
     useVirtualPaginator({
@@ -610,7 +610,7 @@ export function RoomTimeline({
         (index: number) =>
           (scrollRef.current?.querySelector(`[data-message-item="${index}"]`) as HTMLElement) ??
           undefined,
-        []
+        [scrollRef]
       ),
       onEnd: handleTimelinePagination,
     });
@@ -660,9 +660,9 @@ export function RoomTimeline({
         requiresSelection: true,
         clearsSelection: true,
         exitsNav: true,
-        handler: (eventId) => {
-          if (!eventId) return;
-          startReplyFromEventId(eventId);
+        handler: (selectedId) => {
+          if (!selectedId) return;
+          startReplyFromEventId(selectedId);
         },
       },
       {
@@ -670,7 +670,6 @@ export function RoomTimeline({
         requiresSelection: false,
         clearsSelection: true,
         exitsNav: true,
-        handler: () => {},
       },
     ],
     [startReplyFromEventId]
@@ -679,7 +678,6 @@ export function RoomTimeline({
   const { selectedEventId, setSelectedEventId, handleKeyDown } = useRoomTimelineNav(
     {
       timelineNavMode,
-      getItems,
       linkedTimelines: timeline.linkedTimelines,
       shouldRenderEvent,
       scrollToItem,
@@ -754,6 +752,7 @@ export function RoomTimeline({
           return;
         }
         setTimeline((ct) => ({ ...ct }));
+        // Force selection re-compute when timeline contents update in place (e.g. edits/redactions).
         setTimelineRevision((rev) => rev + 1);
         if (!unreadInfo) {
           setUnreadInfo(getRoomUnreadInfo(room));
@@ -931,7 +930,7 @@ export function RoomTimeline({
 
   useEffect(() => {
     setSelectedEventId(undefined);
-  }, [room.roomId, eventId]);
+  }, [room.roomId, eventId, setSelectedEventId]);
 
   // Scroll to bottom on initial timeline load
   useLayoutEffect(() => {
@@ -939,7 +938,7 @@ export function RoomTimeline({
     if (scrollEl) {
       scrollToBottom(scrollEl);
     }
-  }, []);
+  }, [scrollRef]);
 
   // if live timeline is linked and unreadInfo change
   // Scroll to last read message
@@ -987,7 +986,7 @@ export function RoomTimeline({
       if (scrollEl)
         scrollToBottom(scrollEl, scrollToBottomRef.current.smooth ? 'smooth' : 'instant');
     }
-  }, [scrollToBottomCount]);
+  }, [scrollToBottomCount, scrollRef]);
 
   // Remove unreadInfo on mark as read
   useEffect(() => {
@@ -1010,7 +1009,7 @@ export function RoomTimeline({
         });
       }
     }
-  }, [scrollToElement, editId]);
+  }, [scrollToElement, editId, scrollRef]);
 
   const handleJumpToLatest = () => {
     if (eventId) {
@@ -1684,7 +1683,7 @@ export function RoomTimeline({
       if (nextTarget && scrollRef.current?.contains(nextTarget)) return;
       onExitTimelineNav();
     },
-    [onExitTimelineNav, timelineNavMode]
+    [onExitTimelineNav, timelineNavMode, scrollRef]
   );
 
   let prevEvent: MatrixEvent | undefined;

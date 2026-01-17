@@ -1,13 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { isKeyHotkey } from 'is-hotkey';
 import { EventTimeline, MatrixEvent } from 'matrix-js-sdk';
 
-import {
-  getTimelineAndBaseIndex,
-  getTimelineRelativeIndex,
-  getTimelineEvent,
-} from './roomTimelineUtils';
 
 type ItemIndex = number;
 
@@ -21,20 +16,18 @@ export type TimelineSelectionAction = {
   requiresSelection?: boolean;
   clearsSelection?: boolean;
   exitsNav?: boolean;
-  handler: (eventId?: string) => void;
+  handler?: (eventId?: string) => void;
 };
 
 /**
  * Keyboard navigation/selection helper for room timelines.
  *
  * Notes:
- * - `getItems` must return absolute item indices that align with `linkedTimelines`.
  * - `shouldRenderEvent` should match the render logic, or selection may land on hidden events.
  * - `scrollToItem` is expected to support `align: 'center'` and `behavior: 'instant'`.
  */
 type TimelineSelectionContext = {
   timelineNavMode: boolean;
-  getItems: () => ItemIndex[];
   linkedTimelines: EventTimeline[];
   shouldRenderEvent: (mEvent: MatrixEvent) => boolean;
   scrollToItem: (
@@ -50,28 +43,44 @@ type TimelineSelectionContext = {
   timelineRevision?: number;
 };
 
-const getSelectableItems = (
-  getItems: TimelineSelectionContext['getItems'],
+const buildSelectableItems = (
   linkedTimelines: TimelineSelectionContext['linkedTimelines'],
   shouldRenderEvent: TimelineSelectionContext['shouldRenderEvent']
 ): TimelineSelectableItem[] => {
-  const items = getItems();
   const selectable: TimelineSelectableItem[] = [];
+  let baseIndex = 0;
 
-  items.forEach((itemIndex) => {
-    const [eventTimeline, baseIndex] = getTimelineAndBaseIndex(linkedTimelines, itemIndex);
-    if (!eventTimeline) return;
-    const mEvent = getTimelineEvent(
-      eventTimeline,
-      getTimelineRelativeIndex(itemIndex, baseIndex)
-    );
-    const mEventId = mEvent?.getId();
-    if (!mEvent || !mEventId) return;
-    if (!shouldRenderEvent(mEvent)) return;
-    selectable.push({ eventId: mEventId, itemIndex });
+  linkedTimelines.forEach((timeline) => {
+    const events = timeline.getEvents();
+    for (let index = 0; index < events.length; index += 1) {
+      const mEvent = events[index];
+      const eventId = mEvent.getId();
+      if (eventId && shouldRenderEvent(mEvent)) {
+        selectable.push({ eventId, itemIndex: baseIndex + index });
+      }
+    }
+    baseIndex += events.length;
   });
 
   return selectable;
+};
+
+const isSelectableEventId = (
+  eventId: string,
+  linkedTimelines: TimelineSelectionContext['linkedTimelines'],
+  shouldRenderEvent: TimelineSelectionContext['shouldRenderEvent']
+): boolean => {
+  for (let timelineIndex = linkedTimelines.length - 1; timelineIndex >= 0; timelineIndex -= 1) {
+    const timeline = linkedTimelines[timelineIndex];
+    const events = timeline.getEvents();
+    for (let eventIndex = events.length - 1; eventIndex >= 0; eventIndex -= 1) {
+      const mEvent = events[eventIndex];
+      if (mEvent.getId() === eventId) {
+        return shouldRenderEvent(mEvent);
+      }
+    }
+  }
+  return false;
 };
 
 export const useRoomTimelineNav = (
@@ -80,7 +89,6 @@ export const useRoomTimelineNav = (
 ) => {
   const {
     timelineNavMode,
-    getItems,
     linkedTimelines,
     shouldRenderEvent,
     scrollToItem,
@@ -90,17 +98,18 @@ export const useRoomTimelineNav = (
   } = context;
   const [selectedEventId, setSelectedEventId] = useState<string | undefined>();
 
-  const selectableItems = useMemo(
-    () => getSelectableItems(getItems, linkedTimelines, shouldRenderEvent),
-    [getItems, linkedTimelines, shouldRenderEvent, timelineRevision]
-  );
+  const getSelectableItems = useCallback(() => {
+    if (timelineRevision === -1) return [];
+    return buildSelectableItems(linkedTimelines, shouldRenderEvent);
+  }, [linkedTimelines, shouldRenderEvent, timelineRevision]);
 
   useEffect(() => {
     if (!selectedEventId) return;
-    if (!selectableItems.some((item) => item.eventId === selectedEventId)) {
+    if (timelineNavMode) return;
+    if (!isSelectableEventId(selectedEventId, linkedTimelines, shouldRenderEvent)) {
       setSelectedEventId(undefined);
     }
-  }, [selectableItems, selectedEventId]);
+  }, [selectedEventId, timelineNavMode, linkedTimelines, shouldRenderEvent, getSelectableItems]);
 
   const handleKeyDown = useCallback(
     (evt: KeyboardEvent | ReactKeyboardEvent) => {
@@ -109,20 +118,22 @@ export const useRoomTimelineNav = (
       if (!timelineNavMode && !selectedEventId) return;
 
       if (isKeyHotkey(['arrowup', 'arrowdown'], hotkeyEvent)) {
+        const selectableItems = getSelectableItems();
         if (selectableItems.length === 0) return;
         const moveUp = isKeyHotkey('arrowup', hotkeyEvent);
         const currentIndex = selectedEventId
           ? selectableItems.findIndex((item) => item.eventId === selectedEventId)
           : -1;
-        const nextIndex =
-          currentIndex === -1
-            ? moveUp
-              ? selectableItems.length - 1
-              : 0
-            : Math.min(
-                Math.max(currentIndex + (moveUp ? -1 : 1), 0),
-                selectableItems.length - 1
-              );
+        let nextIndex = 0;
+        if (currentIndex === -1) {
+          nextIndex = moveUp ? selectableItems.length - 1 : 0;
+        } else {
+          const delta = moveUp ? -1 : 1;
+          nextIndex = Math.min(
+            Math.max(currentIndex + delta, 0),
+            selectableItems.length - 1
+          );
+        }
         const nextItem = selectableItems[nextIndex];
 
         if (nextItem) {
@@ -147,7 +158,7 @@ export const useRoomTimelineNav = (
       if (action) {
         evt.preventDefault();
         evt.stopPropagation();
-        action.handler(selectedEventId);
+        action.handler?.(selectedEventId);
         if (action.clearsSelection) setSelectedEventId(undefined);
         if (action.exitsNav) onExitTimelineNav();
         return;
@@ -160,9 +171,9 @@ export const useRoomTimelineNav = (
     [
       actions,
       isEditableActive,
+      getSelectableItems,
       onExitTimelineNav,
       scrollToItem,
-      selectableItems,
       selectedEventId,
       timelineNavMode,
     ]
