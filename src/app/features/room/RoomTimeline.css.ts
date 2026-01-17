@@ -35,11 +35,14 @@ export const TimelineScrollFrame = style({
   display: 'flex',
   flexDirection: 'column',
   flexGrow: 1,
+  minWidth: 0,
   minHeight: 0,
 });
 
 export const TimelineScroll = style({
   outline: 'none',
   flexGrow: 1,
+  minWidth: 0,
   minHeight: 0,
+  maxWidth: '100%',
 });
