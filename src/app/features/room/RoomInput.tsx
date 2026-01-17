@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
 import { isKeyHotkey } from 'is-hotkey';
 import { EventType, IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
@@ -117,15 +118,17 @@ import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
+import * as css from './RoomInput.css';
 
 interface RoomInputProps {
   editor: Editor;
   fileDropContainerRef: RefObject<HTMLElement>;
   roomId: string;
   room: Room;
+  onRequestTimelineSelect?: (direction: 'up' | 'down') => void;
 }
 export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-  ({ editor, fileDropContainerRef, roomId, room }, ref) => {
+  ({ editor, fileDropContainerRef, roomId, room, onRequestTimelineSelect }, ref) => {
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
@@ -217,6 +220,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const handlePaste = useFilePasteHandler(handleFiles);
     const dropZoneVisible = useFileDropZone(fileDropContainerRef, handleFiles);
     const [hideStickerBtn, setHideStickerBtn] = useState(document.body.clientWidth < 500);
+    const [navMode, setNavMode] = useState(false);
 
     const isComposing = useComposingCheck();
 
@@ -381,6 +385,26 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const handleKeyDown: KeyboardEventHandler = useCallback(
       (evt) => {
+        if (isKeyHotkey('tab', evt) && !evt.shiftKey && !autocompleteQuery) {
+          evt.preventDefault();
+          setNavMode(true);
+          return;
+        }
+
+        if (navMode) {
+          if (isKeyHotkey(['arrowup', 'arrowdown'], evt)) {
+            if (onRequestTimelineSelect) {
+              evt.preventDefault();
+              evt.stopPropagation();
+              onRequestTimelineSelect(isKeyHotkey('arrowup', evt) ? 'up' : 'down');
+            }
+            setNavMode(false);
+            return;
+          }
+          if (!isKeyHotkey('tab', evt)) {
+            setNavMode(false);
+          }
+        }
         if (
           (isKeyHotkey('mod+enter', evt) || (!enterForNewline && isKeyHotkey('enter', evt))) &&
           !isComposing(evt)
@@ -397,7 +421,15 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           setReplyDraft(undefined);
         }
       },
-      [submit, setReplyDraft, enterForNewline, autocompleteQuery, isComposing]
+      [
+        submit,
+        setReplyDraft,
+        enterForNewline,
+        autocompleteQuery,
+        isComposing,
+        onRequestTimelineSelect,
+        navMode,
+      ]
     );
 
     const handleKeyUp: KeyboardEventHandler = useCallback(
@@ -536,153 +568,155 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             requestClose={handleCloseAutocomplete}
           />
         )}
-        <CustomEditor
-          editableName="RoomInput"
-          editor={editor}
-          placeholder="Send a message..."
-          onKeyDown={handleKeyDown}
-          onKeyUp={handleKeyUp}
-          onPaste={handlePaste}
-          top={
-            replyDraft && (
-              <div>
-                <Box
-                  alignItems="Center"
-                  gap="300"
-                  style={{ padding: `${config.space.S200} ${config.space.S300} 0` }}
-                >
-                  <IconButton
-                    onClick={() => setReplyDraft(undefined)}
-                    variant="SurfaceVariant"
-                    size="300"
-                    radii="300"
+        <div className={classNames(css.RoomInputFrame, navMode && css.RoomInputFrameActive)}>
+          <CustomEditor
+            editableName="RoomInput"
+            editor={editor}
+            placeholder="Send a message..."
+            onKeyDown={handleKeyDown}
+            onKeyUp={handleKeyUp}
+            onPaste={handlePaste}
+            top={
+              replyDraft && (
+                <div>
+                  <Box
+                    alignItems="Center"
+                    gap="300"
+                    style={{ padding: `${config.space.S200} ${config.space.S300} 0` }}
                   >
-                    <Icon src={Icons.Cross} size="50" />
-                  </IconButton>
-                  <Box direction="Row" gap="200" alignItems="Center">
-                    {replyDraft.relation?.rel_type === RelationType.Thread && <ThreadIndicator />}
-                    <ReplyLayout
-                      userColor={replyUsernameColor}
-                      username={
-                        <Text size="T300" truncate>
-                          <b>
-                            {getMemberDisplayName(room, replyDraft.userId) ??
-                              getMxIdLocalPart(replyDraft.userId) ??
-                              replyDraft.userId}
-                          </b>
-                        </Text>
-                      }
+                    <IconButton
+                      onClick={() => setReplyDraft(undefined)}
+                      variant="SurfaceVariant"
+                      size="300"
+                      radii="300"
                     >
-                      <Text size="T300" truncate>
-                        {trimReplyFromBody(replyDraft.body)}
-                      </Text>
-                    </ReplyLayout>
+                      <Icon src={Icons.Cross} size="50" />
+                    </IconButton>
+                    <Box direction="Row" gap="200" alignItems="Center">
+                      {replyDraft.relation?.rel_type === RelationType.Thread && <ThreadIndicator />}
+                      <ReplyLayout
+                        userColor={replyUsernameColor}
+                        username={
+                          <Text size="T300" truncate>
+                            <b>
+                              {getMemberDisplayName(room, replyDraft.userId) ??
+                                getMxIdLocalPart(replyDraft.userId) ??
+                                replyDraft.userId}
+                            </b>
+                          </Text>
+                        }
+                      >
+                        <Text size="T300" truncate>
+                          {trimReplyFromBody(replyDraft.body)}
+                        </Text>
+                      </ReplyLayout>
+                    </Box>
                   </Box>
-                </Box>
-              </div>
-            )
-          }
-          before={
-            <IconButton
-              onClick={() => pickFile('*')}
-              variant="SurfaceVariant"
-              size="300"
-              radii="300"
-            >
-              <Icon src={Icons.PlusCircle} />
-            </IconButton>
-          }
-          after={
-            <>
+                </div>
+              )
+            }
+            before={
               <IconButton
+                onClick={() => pickFile('*')}
                 variant="SurfaceVariant"
                 size="300"
                 radii="300"
-                onClick={() => setToolbar(!toolbar)}
               >
-                <Icon src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
+                <Icon src={Icons.PlusCircle} />
               </IconButton>
-              <UseStateProvider initial={undefined}>
-                {(emojiBoardTab: EmojiBoardTab | undefined, setEmojiBoardTab) => (
-                  <PopOut
-                    offset={16}
-                    alignOffset={-44}
-                    position="Top"
-                    align="End"
-                    anchor={
-                      emojiBoardTab === undefined
-                        ? undefined
-                        : emojiBtnRef.current?.getBoundingClientRect() ?? undefined
-                    }
-                    content={
-                      <EmojiBoard
-                        tab={emojiBoardTab}
-                        onTabChange={setEmojiBoardTab}
-                        imagePackRooms={imagePackRooms}
-                        returnFocusOnDeactivate={false}
-                        onEmojiSelect={handleEmoticonSelect}
-                        onCustomEmojiSelect={handleEmoticonSelect}
-                        onStickerSelect={handleStickerSelect}
-                        requestClose={() => {
-                          setEmojiBoardTab((t) => {
-                            if (t) {
-                              if (!mobileOrTablet()) ReactEditor.focus(editor);
-                              return undefined;
-                            }
-                            return t;
-                          });
-                        }}
-                      />
-                    }
-                  >
-                    {!hideStickerBtn && (
+            }
+            after={
+              <>
+                <IconButton
+                  variant="SurfaceVariant"
+                  size="300"
+                  radii="300"
+                  onClick={() => setToolbar(!toolbar)}
+                >
+                  <Icon src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
+                </IconButton>
+                <UseStateProvider initial={undefined}>
+                  {(emojiBoardTab: EmojiBoardTab | undefined, setEmojiBoardTab) => (
+                    <PopOut
+                      offset={16}
+                      alignOffset={-44}
+                      position="Top"
+                      align="End"
+                      anchor={
+                        emojiBoardTab === undefined
+                          ? undefined
+                          : emojiBtnRef.current?.getBoundingClientRect() ?? undefined
+                      }
+                      content={
+                        <EmojiBoard
+                          tab={emojiBoardTab}
+                          onTabChange={setEmojiBoardTab}
+                          imagePackRooms={imagePackRooms}
+                          returnFocusOnDeactivate={false}
+                          onEmojiSelect={handleEmoticonSelect}
+                          onCustomEmojiSelect={handleEmoticonSelect}
+                          onStickerSelect={handleStickerSelect}
+                          requestClose={() => {
+                            setEmojiBoardTab((t) => {
+                              if (t) {
+                                if (!mobileOrTablet()) ReactEditor.focus(editor);
+                                return undefined;
+                              }
+                              return t;
+                            });
+                          }}
+                        />
+                      }
+                    >
+                      {!hideStickerBtn && (
+                        <IconButton
+                          aria-pressed={emojiBoardTab === EmojiBoardTab.Sticker}
+                          onClick={() => setEmojiBoardTab(EmojiBoardTab.Sticker)}
+                          variant="SurfaceVariant"
+                          size="300"
+                          radii="300"
+                        >
+                          <Icon
+                            src={Icons.Sticker}
+                            filled={emojiBoardTab === EmojiBoardTab.Sticker}
+                          />
+                        </IconButton>
+                      )}
                       <IconButton
-                        aria-pressed={emojiBoardTab === EmojiBoardTab.Sticker}
-                        onClick={() => setEmojiBoardTab(EmojiBoardTab.Sticker)}
+                        ref={emojiBtnRef}
+                        aria-pressed={
+                          hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
+                        }
+                        onClick={() => setEmojiBoardTab(EmojiBoardTab.Emoji)}
                         variant="SurfaceVariant"
                         size="300"
                         radii="300"
                       >
                         <Icon
-                          src={Icons.Sticker}
-                          filled={emojiBoardTab === EmojiBoardTab.Sticker}
+                          src={Icons.Smile}
+                          filled={
+                            hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
+                          }
                         />
                       </IconButton>
-                    )}
-                    <IconButton
-                      ref={emojiBtnRef}
-                      aria-pressed={
-                        hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
-                      }
-                      onClick={() => setEmojiBoardTab(EmojiBoardTab.Emoji)}
-                      variant="SurfaceVariant"
-                      size="300"
-                      radii="300"
-                    >
-                      <Icon
-                        src={Icons.Smile}
-                        filled={
-                          hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
-                        }
-                      />
-                    </IconButton>
-                  </PopOut>
-                )}
-              </UseStateProvider>
-              <IconButton onClick={submit} variant="SurfaceVariant" size="300" radii="300">
-                <Icon src={Icons.Send} />
-              </IconButton>
-            </>
-          }
-          bottom={
-            toolbar && (
-              <div>
-                <Line variant="SurfaceVariant" size="300" />
-                <Toolbar />
-              </div>
-            )
-          }
-        />
+                    </PopOut>
+                  )}
+                </UseStateProvider>
+                <IconButton onClick={submit} variant="SurfaceVariant" size="300" radii="300">
+                  <Icon src={Icons.Send} />
+                </IconButton>
+              </>
+            }
+            bottom={
+              toolbar && (
+                <div>
+                  <Line variant="SurfaceVariant" size="300" />
+                  <Toolbar />
+                </div>
+              )
+            }
+          />
+        </div>
       </div>
     );
   }

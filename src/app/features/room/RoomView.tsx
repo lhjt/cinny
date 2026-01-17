@@ -9,7 +9,7 @@ import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useEditor } from '../../components/editor';
 import { RoomInputPlaceholder } from './RoomInputPlaceholder';
-import { RoomTimeline } from './RoomTimeline';
+import { RoomTimeline, RoomTimelineHandle } from './RoomTimeline';
 import { RoomViewTyping } from './RoomViewTyping';
 import { RoomTombstone } from './RoomTombstone';
 import { RoomInput } from './RoomInput';
@@ -59,6 +59,7 @@ const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
 export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
   const roomInputRef = useRef<HTMLDivElement>(null);
   const roomViewRef = useRef<HTMLDivElement>(null);
+  const roomTimelineRef = useRef<RoomTimelineHandle>(null);
 
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
 
@@ -101,6 +102,7 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
           eventId={eventId}
           roomInputRef={roomInputRef}
           editor={editor}
+          ref={roomTimelineRef}
         />
         <RoomViewTyping room={room} />
       </Box>
@@ -121,6 +123,9 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
                   roomId={roomId}
                   fileDropContainerRef={roomViewRef}
                   ref={roomInputRef}
+                  onRequestTimelineSelect={(direction) =>
+                    roomTimelineRef.current?.selectEdge(direction)
+                  }
                 />
               )}
               {!canMessage && (
