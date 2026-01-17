@@ -59,6 +59,7 @@ const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
 export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
   const roomInputRef = useRef<HTMLDivElement>(null);
   const roomViewRef = useRef<HTMLDivElement>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
   const [timelineNavMode, setTimelineNavMode] = useState(false);
 
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
@@ -92,6 +93,14 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
     )
   );
 
+  const enterTimelineNav = useCallback(() => {
+    setTimelineNavMode(true);
+    timelineScrollRef.current?.focus();
+    requestAnimationFrame(() => {
+      timelineScrollRef.current?.focus();
+    });
+  }, []);
+
   useEffect(() => {
     setTimelineNavMode(false);
   }, [roomId, eventId]);
@@ -108,6 +117,7 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
           editor={editor}
           timelineNavMode={timelineNavMode}
           onExitTimelineNav={() => setTimelineNavMode(false)}
+          timelineScrollRef={timelineScrollRef}
         />
         <RoomViewTyping room={room} />
       </Box>
@@ -129,7 +139,7 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
                   fileDropContainerRef={roomViewRef}
                   ref={roomInputRef}
                   timelineNavMode={timelineNavMode}
-                  onEnterTimelineNav={() => setTimelineNavMode(true)}
+                  onEnterTimelineNav={enterTimelineNav}
                   onExitTimelineNav={() => setTimelineNavMode(false)}
                 />
               )}

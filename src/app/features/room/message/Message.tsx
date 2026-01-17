@@ -818,13 +818,13 @@ export const Message = as<'div', MessageProps>(
     );
 
     const msgContentJSX = (
-      <Box direction="Column" alignSelf="Start" style={{ maxWidth: '100%' }}>
+      <Box direction="Column" alignSelf="Start" style={{ maxWidth: '100%', width: '100%' }}>
         {reply}
         {edit && onEditId ? (
           <MessageEditor
             style={{
               maxWidth: '100%',
-              width: '100vw',
+              width: '100%',
             }}
             roomId={room.roomId}
             room={room}

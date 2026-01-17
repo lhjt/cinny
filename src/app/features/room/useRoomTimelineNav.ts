@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { isKeyHotkey } from 'is-hotkey';
 import { EventTimeline, MatrixEvent } from 'matrix-js-sdk';
 
@@ -34,6 +35,7 @@ type TimelineSelectionContext = {
   ) => void;
   onExitTimelineNav: () => void;
   isEditableActive?: () => boolean;
+  timelineRevision?: number;
 };
 
 const getSelectableItems = (
@@ -72,12 +74,13 @@ export const useRoomTimelineNav = (
     scrollToItem,
     onExitTimelineNav,
     isEditableActive,
+    timelineRevision,
   } = context;
   const [selectedEventId, setSelectedEventId] = useState<string | undefined>();
 
   const selectableItems = useMemo(
     () => getSelectableItems(getItems, linkedTimelines, shouldRenderEvent),
-    [getItems, linkedTimelines, shouldRenderEvent]
+    [getItems, linkedTimelines, shouldRenderEvent, timelineRevision]
   );
 
   useEffect(() => {
@@ -88,13 +91,14 @@ export const useRoomTimelineNav = (
   }, [selectableItems, selectedEventId]);
 
   const handleKeyDown = useCallback(
-    (evt: KeyboardEvent) => {
-      if (evt.metaKey || evt.ctrlKey || evt.altKey) return;
+    (evt: KeyboardEvent | ReactKeyboardEvent) => {
+      const hotkeyEvent = 'nativeEvent' in evt ? evt.nativeEvent : evt;
+      if (hotkeyEvent.metaKey || hotkeyEvent.ctrlKey || hotkeyEvent.altKey) return;
       if (!timelineNavMode && !selectedEventId) return;
 
-      if (isKeyHotkey(['arrowup', 'arrowdown'], evt)) {
+      if (isKeyHotkey(['arrowup', 'arrowdown'], hotkeyEvent)) {
         if (selectableItems.length === 0) return;
-        const moveUp = isKeyHotkey('arrowup', evt);
+        const moveUp = isKeyHotkey('arrowup', hotkeyEvent);
         const currentIndex = selectedEventId
           ? selectableItems.findIndex((item) => item.eventId === selectedEventId)
           : -1;
@@ -126,7 +130,7 @@ export const useRoomTimelineNav = (
 
       const action = actions.find(
         ({ hotkey, requiresSelection }) =>
-          isKeyHotkey(hotkey, evt) && (!requiresSelection || !!selectedEventId)
+          isKeyHotkey(hotkey, hotkeyEvent) && (!requiresSelection || !!selectedEventId)
       );
       if (action) {
         evt.preventDefault();

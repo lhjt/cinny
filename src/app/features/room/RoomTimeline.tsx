@@ -1,6 +1,7 @@
 /* eslint-disable react/destructuring-assignment */
 import React, {
   Dispatch,
+  FocusEventHandler,
   MouseEventHandler,
   RefObject,
   SetStateAction,
@@ -216,6 +217,7 @@ type RoomTimelineProps = {
   editor: Editor;
   timelineNavMode: boolean;
   onExitTimelineNav: () => void;
+  timelineScrollRef?: RefObject<HTMLDivElement>;
 };
 
 const PAGINATION_LIMIT = 80;
@@ -425,6 +427,7 @@ export function RoomTimeline({
   editor,
   timelineNavMode,
   onExitTimelineNav,
+  timelineScrollRef,
 }: RoomTimelineProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
@@ -491,7 +494,8 @@ export function RoomTimeline({
   const atBottomRef = useRef(atBottom);
   atBottomRef.current = atBottom;
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const internalScrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = timelineScrollRef ?? internalScrollRef;
   const scrollToBottomRef = useRef({
     count: 0,
     smooth: true,
@@ -575,6 +579,7 @@ export function RoomTimeline({
   const [timeline, setTimeline] = useState<Timeline>(() =>
     eventId ? getEmptyTimeline() : getInitialTimeline(room)
   );
+  const [timelineRevision, setTimelineRevision] = useState(0);
   const eventsLength = getTimelinesEventsCount(timeline.linkedTimelines);
   const liveTimelineLinked =
     timeline.linkedTimelines[timeline.linkedTimelines.length - 1] === getLiveTimeline(room);
@@ -680,6 +685,7 @@ export function RoomTimeline({
       scrollToItem,
       onExitTimelineNav,
       isEditableActive: editableActiveElement,
+      timelineRevision,
     },
     selectionActions
   );
@@ -748,6 +754,7 @@ export function RoomTimeline({
           return;
         }
         setTimeline((ct) => ({ ...ct }));
+        setTimelineRevision((rev) => rev + 1);
         if (!unreadInfo) {
           setUnreadInfo(getRoomUnreadInfo(room));
         }
@@ -1670,8 +1677,15 @@ export function RoomTimeline({
     }
   );
 
-  const keydownOptions = useMemo<AddEventListenerOptions>(() => ({ capture: true }), []);
-  useKeyDown(window, handleKeyDown, keydownOptions);
+  const handleTimelineBlur: FocusEventHandler<HTMLDivElement> = useCallback(
+    (evt) => {
+      if (!timelineNavMode) return;
+      const nextTarget = evt.relatedTarget as Node | null;
+      if (nextTarget && scrollRef.current?.contains(nextTarget)) return;
+      onExitTimelineNav();
+    },
+    [onExitTimelineNav, timelineNavMode]
+  );
 
   let prevEvent: MatrixEvent | undefined;
   let isPrevRendered = false;
@@ -1798,6 +1812,8 @@ export function RoomTimeline({
           ref={scrollRef}
           className={css.TimelineScroll}
           tabIndex={0}
+          onKeyDown={handleKeyDown}
+          onBlur={handleTimelineBlur}
           visibility="Hover"
         >
           <Box
