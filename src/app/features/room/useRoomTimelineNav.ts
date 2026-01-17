@@ -116,10 +116,13 @@ export const useRoomTimelineNav = (
   const handleKeyDown = useCallback(
     (evt: KeyboardEvent | ReactKeyboardEvent) => {
       const hotkeyEvent = 'nativeEvent' in evt ? evt.nativeEvent : evt;
+      // Ignore modified shortcuts; these are handled elsewhere (e.g. browser/app shortcuts).
       if (hotkeyEvent.metaKey || hotkeyEvent.ctrlKey || hotkeyEvent.altKey) return;
+      // Only handle nav keys when nav mode is active or a selection already exists.
       if (!timelineNavMode && !selectedEventId) return;
 
       if (isKeyHotkey(['arrowup', 'arrowdown'], hotkeyEvent)) {
+        // Build a deterministic list from live timeline data, not the rendered range.
         const selectableItems = getSelectableItems();
         if (selectableItems.length === 0) return;
         const moveUp = isKeyHotkey('arrowup', hotkeyEvent);
@@ -127,9 +130,11 @@ export const useRoomTimelineNav = (
           ? selectableItems.findIndex((item) => item.eventId === selectedEventId)
           : -1;
         let nextIndex = 0;
+        // No current selection: jump to the start/end depending on direction.
         if (currentIndex === -1) {
           nextIndex = moveUp ? selectableItems.length - 1 : 0;
         } else {
+          // Step one item within bounds.
           const delta = moveUp ? -1 : 1;
           nextIndex = Math.min(
             Math.max(currentIndex + delta, 0),
@@ -153,6 +158,7 @@ export const useRoomTimelineNav = (
         return;
       }
 
+      // Non-arrow hotkeys (e.g. reply) that operate on the current selection.
       const action = actions.find(
         ({ hotkey, requiresSelection }) =>
           isKeyHotkey(hotkey, hotkeyEvent) && (!requiresSelection || !!selectedEventId)
@@ -166,6 +172,7 @@ export const useRoomTimelineNav = (
         return;
       }
 
+      // If the user started typing into an editor, drop selection to avoid stealing keys.
       if (selectedEventId && isEditableActive?.()) {
         setSelectedEventId(undefined);
       }
