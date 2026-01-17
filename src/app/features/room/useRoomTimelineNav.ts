@@ -24,6 +24,14 @@ export type TimelineSelectionAction = {
   handler: (eventId?: string) => void;
 };
 
+/**
+ * Keyboard navigation/selection helper for room timelines.
+ *
+ * Notes:
+ * - `getItems` must return absolute item indices that align with `linkedTimelines`.
+ * - `shouldRenderEvent` should match the render logic, or selection may land on hidden events.
+ * - `scrollToItem` is expected to support `align: 'center'` and `behavior: 'instant'`.
+ */
 type TimelineSelectionContext = {
   timelineNavMode: boolean;
   getItems: () => ItemIndex[];
@@ -35,6 +43,10 @@ type TimelineSelectionContext = {
   ) => void;
   onExitTimelineNav: () => void;
   isEditableActive?: () => boolean;
+  /**
+   * Increment when timeline contents change without a new linkedTimelines reference
+   * (e.g. redactions/edits that cause in-place updates).
+   */
   timelineRevision?: number;
 };
 
