@@ -125,10 +125,23 @@ interface RoomInputProps {
   fileDropContainerRef: RefObject<HTMLElement>;
   roomId: string;
   room: Room;
-  onRequestTimelineSelect?: (direction: 'up' | 'down') => void;
+  timelineNavMode: boolean;
+  onEnterTimelineNav: () => void;
+  onExitTimelineNav: () => void;
 }
 export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-  ({ editor, fileDropContainerRef, roomId, room, onRequestTimelineSelect }, ref) => {
+  (
+    {
+      editor,
+      fileDropContainerRef,
+      roomId,
+      room,
+      timelineNavMode,
+      onEnterTimelineNav,
+      onExitTimelineNav,
+    },
+    ref
+  ) => {
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
@@ -220,7 +233,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const handlePaste = useFilePasteHandler(handleFiles);
     const dropZoneVisible = useFileDropZone(fileDropContainerRef, handleFiles);
     const [hideStickerBtn, setHideStickerBtn] = useState(document.body.clientWidth < 500);
-    const [navMode, setNavMode] = useState(false);
 
     const isComposing = useComposingCheck();
 
@@ -387,22 +399,23 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       (evt) => {
         if (isKeyHotkey('tab', evt) && !evt.shiftKey && !autocompleteQuery) {
           evt.preventDefault();
-          setNavMode(true);
+          onEnterTimelineNav();
           return;
         }
 
-        if (navMode) {
+        if (timelineNavMode) {
           if (isKeyHotkey(['arrowup', 'arrowdown'], evt)) {
-            if (onRequestTimelineSelect) {
-              evt.preventDefault();
-              evt.stopPropagation();
-              onRequestTimelineSelect(isKeyHotkey('arrowup', evt) ? 'up' : 'down');
-            }
-            setNavMode(false);
+            evt.preventDefault();
             return;
           }
-          if (!isKeyHotkey('tab', evt)) {
-            setNavMode(false);
+          if (
+            !isKeyHotkey('tab', evt) &&
+            evt.key !== 'Shift' &&
+            evt.key !== 'Alt' &&
+            evt.key !== 'Control' &&
+            evt.key !== 'Meta'
+          ) {
+            onExitTimelineNav();
           }
         }
         if (
@@ -427,8 +440,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         enterForNewline,
         autocompleteQuery,
         isComposing,
-        onRequestTimelineSelect,
-        navMode,
+        onEnterTimelineNav,
+        onExitTimelineNav,
+        timelineNavMode,
       ]
     );
 
@@ -568,7 +582,12 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             requestClose={handleCloseAutocomplete}
           />
         )}
-        <div className={classNames(css.RoomInputFrame, navMode && css.RoomInputFrameActive)}>
+        <div
+          className={classNames(
+            css.RoomInputFrame,
+            timelineNavMode && css.RoomInputFrameActive
+          )}
+        >
           <CustomEditor
             editableName="RoomInput"
             editor={editor}

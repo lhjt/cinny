@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text, config } from 'folds';
 import { EventType, Room } from 'matrix-js-sdk';
 import { ReactEditor } from 'slate-react';
@@ -9,7 +9,7 @@ import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useEditor } from '../../components/editor';
 import { RoomInputPlaceholder } from './RoomInputPlaceholder';
-import { RoomTimeline, RoomTimelineHandle } from './RoomTimeline';
+import { RoomTimeline } from './RoomTimeline';
 import { RoomViewTyping } from './RoomViewTyping';
 import { RoomTombstone } from './RoomTombstone';
 import { RoomInput } from './RoomInput';
@@ -59,7 +59,7 @@ const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
 export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
   const roomInputRef = useRef<HTMLDivElement>(null);
   const roomViewRef = useRef<HTMLDivElement>(null);
-  const roomTimelineRef = useRef<RoomTimelineHandle>(null);
+  const [timelineNavMode, setTimelineNavMode] = useState(false);
 
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
 
@@ -92,6 +92,10 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
     )
   );
 
+  useEffect(() => {
+    setTimelineNavMode(false);
+  }, [roomId, eventId]);
+
   return (
     <Page ref={roomViewRef}>
       <RoomViewHeader />
@@ -102,7 +106,8 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
           eventId={eventId}
           roomInputRef={roomInputRef}
           editor={editor}
-          ref={roomTimelineRef}
+          timelineNavMode={timelineNavMode}
+          onExitTimelineNav={() => setTimelineNavMode(false)}
         />
         <RoomViewTyping room={room} />
       </Box>
@@ -123,9 +128,9 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
                   roomId={roomId}
                   fileDropContainerRef={roomViewRef}
                   ref={roomInputRef}
-                  onRequestTimelineSelect={(direction) =>
-                    roomTimelineRef.current?.selectEdge(direction)
-                  }
+                  timelineNavMode={timelineNavMode}
+                  onEnterTimelineNav={() => setTimelineNavMode(true)}
+                  onExitTimelineNav={() => setTimelineNavMode(false)}
                 />
               )}
               {!canMessage && (
