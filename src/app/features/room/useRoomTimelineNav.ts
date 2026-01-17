@@ -50,6 +50,7 @@ const buildSelectableItems = (
   const selectable: TimelineSelectableItem[] = [];
   let baseIndex = 0;
 
+  // Walk linked timelines and map each event to its absolute index.
   linkedTimelines.forEach((timeline) => {
     const events = timeline.getEvents();
     for (let index = 0; index < events.length; index += 1) {
@@ -99,6 +100,7 @@ export const useRoomTimelineNav = (
   const [selectedEventId, setSelectedEventId] = useState<string | undefined>();
 
   const getSelectableItems = useCallback(() => {
+    // Build from live timeline data so selection doesn't depend on the virtualized range.
     if (timelineRevision === -1) return [];
     return buildSelectableItems(linkedTimelines, shouldRenderEvent);
   }, [linkedTimelines, shouldRenderEvent, timelineRevision]);

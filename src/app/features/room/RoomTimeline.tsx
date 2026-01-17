@@ -501,6 +501,7 @@ export function RoomTimeline({
     smooth: true,
   });
 
+  // Shared filter for both rendering and selection to keep behavior in sync.
   const shouldRenderEvent = useCallback(
     (mEvent: MatrixEvent): boolean => {
       const eventSender = mEvent.getSender();
@@ -719,6 +720,11 @@ export function RoomTimeline({
     }, [alive, room])
   );
 
+  const bumpTimelineRevision = useCallback(() => {
+    // Force selection re-compute when timeline contents update in place (e.g. edits/redactions).
+    setTimelineRevision((rev) => rev + 1);
+  }, []);
+
   useLiveEventArrive(
     room,
     useCallback(
@@ -752,13 +758,12 @@ export function RoomTimeline({
           return;
         }
         setTimeline((ct) => ({ ...ct }));
-        // Force selection re-compute when timeline contents update in place (e.g. edits/redactions).
-        setTimelineRevision((rev) => rev + 1);
+        bumpTimelineRevision();
         if (!unreadInfo) {
           setUnreadInfo(getRoomUnreadInfo(room));
         }
       },
-      [mx, room, unreadInfo, hideActivity]
+      [mx, room, unreadInfo, hideActivity, bumpTimelineRevision]
     )
   );
 
@@ -1699,13 +1704,10 @@ export function RoomTimeline({
 
     if (!mEvent || !mEventId) return null;
 
+    // Skip any events that wouldn't be rendered, to keep selection and layout aligned.
+    if (!shouldRenderEvent(mEvent)) return null;
+
     const eventSender = mEvent.getSender();
-    if (eventSender && ignoredUsersSet.has(eventSender)) {
-      return null;
-    }
-    if (mEvent.isRedacted() && !showHiddenEvents) {
-      return null;
-    }
 
     if (!newDivider && readUptoEventIdRef.current) {
       newDivider = prevEvent?.getId() === readUptoEventIdRef.current;
@@ -1723,17 +1725,15 @@ export function RoomTimeline({
       prevEvent.getType() === mEvent.getType() &&
       minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
 
-    const eventJSX = reactionOrEditEvent(mEvent)
-      ? null
-      : renderMatrixEvent(
-          mEvent.getType(),
-          typeof mEvent.getStateKey() === 'string',
-          mEventId,
-          mEvent,
-          item,
-          timelineSet,
-          collapsed
-        );
+    const eventJSX = renderMatrixEvent(
+      mEvent.getType(),
+      typeof mEvent.getStateKey() === 'string',
+      mEventId,
+      mEvent,
+      item,
+      timelineSet,
+      collapsed
+    );
     prevEvent = mEvent;
     isPrevRendered = !!eventJSX;
 
