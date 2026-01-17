@@ -104,6 +104,12 @@ import { roomIdToReplyDraftAtomFamily } from '../../state/room/roomInputDrafts';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../types/matrix/room';
 import { useKeyDown } from '../../hooks/useKeyDown';
+import { TimelineSelectionAction, useRoomTimelineNav } from './useRoomTimelineNav';
+import {
+  getTimelineAndBaseIndex,
+  getTimelineRelativeIndex,
+  getTimelineEvent,
+} from './roomTimelineUtils';
 import { useDocumentFocusChange } from '../../hooks/useDocumentFocusChange';
 import { RenderMessageContent } from '../../components/RenderMessageContent';
 import { Image } from '../../components/media';
@@ -187,26 +193,6 @@ export const getTimelinesEventsCount = (timelines: EventTimeline[]): number => {
     count + timelineToEventsCount(tm);
   return timelines.reduce(timelineEventCountReducer, 0);
 };
-
-export const getTimelineAndBaseIndex = (
-  timelines: EventTimeline[],
-  index: number
-): [EventTimeline | undefined, number] => {
-  let uptoTimelineLen = 0;
-  const timeline = timelines.find((t) => {
-    uptoTimelineLen += t.getEvents().length;
-    if (index < uptoTimelineLen) return true;
-    return false;
-  });
-  if (!timeline) return [undefined, 0];
-  return [timeline, uptoTimelineLen - timeline.getEvents().length];
-};
-
-export const getTimelineRelativeIndex = (absoluteIndex: number, timelineBaseIndex: number) =>
-  absoluteIndex - timelineBaseIndex;
-
-export const getTimelineEvent = (timeline: EventTimeline, index: number): MatrixEvent | undefined =>
-  timeline.getEvents()[index];
 
 export const getEventIdAbsoluteIndex = (
   timelines: EventTimeline[],
@@ -511,7 +497,49 @@ export function RoomTimeline({
     smooth: true,
   });
 
-  const [selectedEventId, setSelectedEventId] = useState<string | undefined>();
+  const shouldRenderEvent = useCallback(
+    (mEvent: MatrixEvent): boolean => {
+      const eventSender = mEvent.getSender();
+      if (eventSender && ignoredUsersSet.has(eventSender)) return false;
+      if (mEvent.isRedacted() && !showHiddenEvents) return false;
+      if (reactionOrEditEvent(mEvent)) return false;
+
+      const eventType = mEvent.getType();
+      const isStateEvent = typeof mEvent.getStateKey() === 'string';
+
+      if (isStateEvent) {
+        if (eventType === StateEvent.RoomMember) {
+          const membershipChanged = isMembershipChanged(mEvent);
+          if (membershipChanged && hideMembershipEvents) return false;
+          if (!membershipChanged && hideNickAvatarEvents) return false;
+          return true;
+        }
+        if (
+          eventType === StateEvent.RoomName ||
+          eventType === StateEvent.RoomTopic ||
+          eventType === StateEvent.RoomAvatar
+        ) {
+          return true;
+        }
+        return showHiddenEvents;
+      }
+
+      if (
+        eventType === MessageEvent.RoomMessage ||
+        eventType === MessageEvent.RoomMessageEncrypted ||
+        eventType === MessageEvent.Sticker
+      ) {
+        return true;
+      }
+
+      if (!showHiddenEvents) return false;
+      if (Object.keys(mEvent.getContent()).length === 0) return false;
+      if (mEvent.getRelation()) return false;
+      if (mEvent.isRedaction()) return false;
+      return true;
+    },
+    [ignoredUsersSet, showHiddenEvents, hideMembershipEvents, hideNickAvatarEvents]
+  );
 
   const [focusItem, setFocusItem] = useState<
     | {
@@ -581,6 +609,80 @@ export function RoomTimeline({
       ),
       onEnd: handleTimelinePagination,
     });
+
+  const startReplyFromEventId = useCallback(
+    (replyId: string, startThread = false) => {
+      const replyEvt = room.findEventById(replyId);
+      if (!replyEvt) return;
+      const editedReply = getEditedEvent(replyId, replyEvt, room.getUnfilteredTimelineSet());
+      const content: IContent = editedReply?.getContent()['m.new_content'] ?? replyEvt.getContent();
+      const { body, formatted_body: formattedBody } = content;
+      const { 'm.relates_to': relation } = startThread
+        ? { 'm.relates_to': { rel_type: 'm.thread', event_id: replyId } }
+        : replyEvt.getWireContent();
+      const senderId = replyEvt.getSender();
+      if (senderId && typeof body === 'string') {
+        setReplyDraft({
+          userId: senderId,
+          eventId: replyId,
+          body,
+          formattedBody,
+          relation,
+        });
+        setTimeout(() => ReactEditor.focus(editor), 100);
+      }
+    },
+    [room, setReplyDraft, editor]
+  );
+
+  const handleReplyClick: MouseEventHandler<HTMLButtonElement> = useCallback(
+    (evt, startThread = false) => {
+      const replyId = evt.currentTarget.getAttribute('data-event-id');
+      if (!replyId) {
+        console.warn('Button should have "data-event-id" attribute!');
+        return;
+      }
+      startReplyFromEventId(replyId, startThread);
+    },
+    [startReplyFromEventId]
+  );
+
+  // Add new selected-message actions here (e.g. '+' for reactions).
+  const selectionActions = useMemo<TimelineSelectionAction[]>(
+    () => [
+      {
+        hotkey: 'r',
+        requiresSelection: true,
+        clearsSelection: true,
+        exitsNav: true,
+        handler: (eventId) => {
+          if (!eventId) return;
+          startReplyFromEventId(eventId);
+        },
+      },
+      {
+        hotkey: 'escape',
+        requiresSelection: false,
+        clearsSelection: true,
+        exitsNav: true,
+        handler: () => {},
+      },
+    ],
+    [startReplyFromEventId]
+  );
+
+  const { selectedEventId, setSelectedEventId, handleKeyDown } = useRoomTimelineNav(
+    {
+      timelineNavMode,
+      getItems,
+      linkedTimelines: timeline.linkedTimelines,
+      shouldRenderEvent,
+      scrollToItem,
+      onExitTimelineNav,
+      isEditableActive: editableActiveElement,
+    },
+    selectionActions
+  );
 
   const loadEventTimeline = useEventTimelineLoader(
     mx,
@@ -970,201 +1072,6 @@ export function RoomTimeline({
       moveCursor(editor);
     },
     [mx, room, editor]
-  );
-
-  const startReplyFromEventId = useCallback(
-    (replyId: string, startThread = false) => {
-      const replyEvt = room.findEventById(replyId);
-      if (!replyEvt) return;
-      const editedReply = getEditedEvent(replyId, replyEvt, room.getUnfilteredTimelineSet());
-      const content: IContent = editedReply?.getContent()['m.new_content'] ?? replyEvt.getContent();
-      const { body, formatted_body: formattedBody } = content;
-      const { 'm.relates_to': relation } = startThread
-        ? { 'm.relates_to': { rel_type: 'm.thread', event_id: replyId } }
-        : replyEvt.getWireContent();
-      const senderId = replyEvt.getSender();
-      if (senderId && typeof body === 'string') {
-        setReplyDraft({
-          userId: senderId,
-          eventId: replyId,
-          body,
-          formattedBody,
-          relation,
-        });
-        setTimeout(() => ReactEditor.focus(editor), 100);
-      }
-    },
-    [room, setReplyDraft, editor]
-  );
-
-  const handleReplyClick: MouseEventHandler<HTMLButtonElement> = useCallback(
-    (evt, startThread = false) => {
-      const replyId = evt.currentTarget.getAttribute('data-event-id');
-      if (!replyId) {
-        console.warn('Button should have "data-event-id" attribute!');
-        return;
-      }
-      startReplyFromEventId(replyId, startThread);
-    },
-    [startReplyFromEventId]
-  );
-
-  const shouldRenderEvent = useCallback(
-    (mEvent: MatrixEvent): boolean => {
-      const eventSender = mEvent.getSender();
-      if (eventSender && ignoredUsersSet.has(eventSender)) return false;
-      if (mEvent.isRedacted() && !showHiddenEvents) return false;
-      if (reactionOrEditEvent(mEvent)) return false;
-
-      const eventType = mEvent.getType();
-      const isStateEvent = typeof mEvent.getStateKey() === 'string';
-
-      if (isStateEvent) {
-        if (eventType === StateEvent.RoomMember) {
-          const membershipChanged = isMembershipChanged(mEvent);
-          if (membershipChanged && hideMembershipEvents) return false;
-          if (!membershipChanged && hideNickAvatarEvents) return false;
-          return true;
-        }
-        if (
-          eventType === StateEvent.RoomName ||
-          eventType === StateEvent.RoomTopic ||
-          eventType === StateEvent.RoomAvatar
-        ) {
-          return true;
-        }
-        return showHiddenEvents;
-      }
-
-      if (
-        eventType === MessageEvent.RoomMessage ||
-        eventType === MessageEvent.RoomMessageEncrypted ||
-        eventType === MessageEvent.Sticker
-      ) {
-        return true;
-      }
-
-      if (!showHiddenEvents) return false;
-      if (Object.keys(mEvent.getContent()).length === 0) return false;
-      if (mEvent.getRelation()) return false;
-      if (mEvent.isRedaction()) return false;
-      return true;
-    },
-    [ignoredUsersSet, showHiddenEvents, hideMembershipEvents, hideNickAvatarEvents]
-  );
-
-  const getSelectableItems = useCallback(
-    (): { eventId: string; itemIndex: number }[] => {
-      const items = getItems();
-      const selectable: { eventId: string; itemIndex: number }[] = [];
-
-      items.forEach((itemIndex) => {
-        const [eventTimeline, baseIndex] = getTimelineAndBaseIndex(
-          timeline.linkedTimelines,
-          itemIndex
-        );
-        if (!eventTimeline) return;
-        const mEvent = getTimelineEvent(
-          eventTimeline,
-          getTimelineRelativeIndex(itemIndex, baseIndex)
-        );
-        const mEventId = mEvent?.getId();
-        if (!mEvent || !mEventId) return;
-        if (!shouldRenderEvent(mEvent)) return;
-        selectable.push({ eventId: mEventId, itemIndex });
-      });
-
-      return selectable;
-    },
-    [getItems, timeline.linkedTimelines, shouldRenderEvent]
-  );
-
-  // Add new selected-message actions here (e.g. '+' for reactions).
-  const selectionActions = useMemo(
-    () => [
-      {
-        hotkey: 'r',
-        requiresSelection: true,
-        handler: () => {
-          if (!selectedEventId) return;
-          startReplyFromEventId(selectedEventId);
-          setSelectedEventId(undefined);
-          onExitTimelineNav();
-        },
-      },
-      {
-        hotkey: 'escape',
-        requiresSelection: false,
-        handler: () => {
-          setSelectedEventId(undefined);
-          onExitTimelineNav();
-        },
-      },
-    ],
-    [onExitTimelineNav, selectedEventId, startReplyFromEventId]
-  );
-
-  const handleTimelineKeyDown = useCallback(
-    (evt: KeyboardEvent) => {
-      if (evt.metaKey || evt.ctrlKey || evt.altKey) return;
-      const hasEditableFocus = editableActiveElement();
-      if (!timelineNavMode && !selectedEventId && hasEditableFocus) return;
-      if (!timelineNavMode && !selectedEventId) return;
-
-      if (isKeyHotkey(['arrowup', 'arrowdown'], evt)) {
-        const items = getSelectableItems();
-        if (items.length === 0) return;
-
-        const moveUp = isKeyHotkey('arrowup', evt);
-        const currentIndex = selectedEventId
-          ? items.findIndex((item) => item.eventId === selectedEventId)
-          : -1;
-        const nextIndex =
-          currentIndex === -1
-            ? moveUp
-              ? items.length - 1
-              : 0
-            : Math.min(Math.max(currentIndex + (moveUp ? -1 : 1), 0), items.length - 1);
-        const nextItem = items[nextIndex];
-
-        if (nextItem) {
-          setSelectedEventId(nextItem.eventId);
-          scrollToItem(nextItem.itemIndex, {
-            behavior: 'instant',
-            align: 'center',
-            stopInView: true,
-          });
-          if (timelineNavMode) onExitTimelineNav();
-        }
-
-        evt.preventDefault();
-        evt.stopPropagation();
-        return;
-      }
-
-      const action = selectionActions.find(
-        ({ hotkey, requiresSelection }) =>
-          isKeyHotkey(hotkey, evt) && (!requiresSelection || !!selectedEventId)
-      );
-      if (action) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        action.handler();
-        return;
-      }
-
-      if (selectedEventId && hasEditableFocus) {
-        setSelectedEventId(undefined);
-      }
-    },
-    [
-      getSelectableItems,
-      onExitTimelineNav,
-      scrollToItem,
-      selectedEventId,
-      selectionActions,
-      timelineNavMode,
-    ]
   );
 
   const handleReactionToggle = useCallback(
@@ -1764,15 +1671,7 @@ export function RoomTimeline({
   );
 
   const keydownOptions = useMemo<AddEventListenerOptions>(() => ({ capture: true }), []);
-  useKeyDown(window, handleTimelineKeyDown, keydownOptions);
-
-  useEffect(() => {
-    if (!selectedEventId) return;
-    const items = getSelectableItems();
-    if (!items.some((item) => item.eventId === selectedEventId)) {
-      setSelectedEventId(undefined);
-    }
-  }, [getSelectableItems, selectedEventId]);
+  useKeyDown(window, handleKeyDown, keydownOptions);
 
   let prevEvent: MatrixEvent | undefined;
   let isPrevRendered = false;
