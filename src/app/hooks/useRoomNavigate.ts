@@ -15,6 +15,7 @@ import { mDirectAtom } from '../state/mDirectList';
 import { useSelectedSpace } from './router/useSelectedSpace';
 import { settingsAtom } from '../state/settings';
 import { useSetting } from '../state/hooks/settings';
+import { useDirectSelected } from './router/useDirectSelected';
 
 export const useRoomNavigate = () => {
   const navigate = useNavigate();
@@ -23,6 +24,7 @@ export const useRoomNavigate = () => {
   const mDirects = useAtomValue(mDirectAtom);
   const spaceSelectedId = useSelectedSpace();
   const [developerTools] = useSetting(settingsAtom, 'developerTools');
+  const directSelected = useDirectSelected();
 
   const navigateSpace = useCallback(
     (roomId: string) => {
@@ -36,6 +38,11 @@ export const useRoomNavigate = () => {
     (roomId: string, eventId?: string, opts?: NavigateOptions) => {
       const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
       const openSpaceTimeline = developerTools && spaceSelectedId === roomId;
+
+      if (directSelected && mDirects.has(roomId)) {
+        navigate(getDirectRoomPath(roomIdOrAlias, eventId), opts);
+        return;
+      }
 
       const orphanParents = openSpaceTimeline ? [roomId] : getOrphanParents(roomToParents, roomId);
       if (orphanParents.length > 0) {
@@ -62,7 +69,7 @@ export const useRoomNavigate = () => {
 
       navigate(getHomeRoomPath(roomIdOrAlias, eventId), opts);
     },
-    [mx, navigate, spaceSelectedId, roomToParents, mDirects, developerTools]
+    [mx, navigate, spaceSelectedId, roomToParents, mDirects, developerTools, directSelected]
   );
 
   return {
