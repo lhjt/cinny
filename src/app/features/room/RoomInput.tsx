@@ -128,6 +128,7 @@ interface RoomInputProps {
   timelineNavMode: boolean;
   onEnterTimelineNav: () => void;
   onExitTimelineNav: () => void;
+  onEscapeToLatest: () => void;
 }
 export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
   (
@@ -139,6 +140,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       timelineNavMode,
       onEnterTimelineNav,
       onExitTimelineNav,
+      onEscapeToLatest,
     },
     ref
   ) => {
@@ -432,6 +434,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             return;
           }
           setReplyDraft(undefined);
+          onEscapeToLatest();
         }
       },
       [
@@ -442,6 +445,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         isComposing,
         onEnterTimelineNav,
         onExitTimelineNav,
+        onEscapeToLatest,
         timelineNavMode,
       ]
     );

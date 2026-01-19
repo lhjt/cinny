@@ -218,6 +218,7 @@ type RoomTimelineProps = {
   timelineNavMode: boolean;
   onExitTimelineNav: () => void;
   timelineScrollRef?: RefObject<HTMLDivElement>;
+  jumpToLatestAndReadRequest?: number;
 };
 
 const PAGINATION_LIMIT = 80;
@@ -429,6 +430,7 @@ export function RoomTimeline({
   timelineNavMode,
   onExitTimelineNav,
   timelineScrollRef,
+  jumpToLatestAndReadRequest,
 }: RoomTimelineProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
@@ -485,10 +487,7 @@ export function RoomTimeline({
   const imagePackRooms: Room[] = useImagePackRooms(room.roomId, roomToParents);
 
   const [unreadInfo, setUnreadInfo] = useState(() => getRoomUnreadInfo(room, true));
-  const readUptoEventIdRef = useRef<string>();
-  if (unreadInfo) {
-    readUptoEventIdRef.current = unreadInfo.readUptoEventId;
-  }
+  const readUptoEventId = unreadInfo?.readUptoEventId;
 
   const atBottomAnchorRef = useRef<HTMLElement>(null);
   const [atBottom, setAtBottom] = useState<boolean>(true);
@@ -723,7 +722,7 @@ export function RoomTimeline({
         setFocusItem({
           index: evtAbsIndex,
           scrollTo: true,
-          highlight: evtId !== readUptoEventIdRef.current,
+          highlight: evtId !== readUptoEventId,
         });
         setTimeline({
           linkedTimelines: lTimelines,
@@ -733,7 +732,7 @@ export function RoomTimeline({
           },
         });
       },
-      [alive]
+      [alive, readUptoEventId]
     ),
     useCallback(() => {
       if (!alive()) return;
@@ -853,7 +852,6 @@ export function RoomTimeline({
   );
 
   const tryAutoMarkAsRead = useCallback(() => {
-    const readUptoEventId = readUptoEventIdRef.current;
     if (!readUptoEventId) {
       requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity));
       return;
@@ -863,7 +861,7 @@ export function RoomTimeline({
     if (latestTimeline === room.getLiveTimeline()) {
       requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity));
     }
-  }, [mx, room, hideActivity]);
+  }, [mx, room, hideActivity, readUptoEventId]);
 
   const debounceSetAtBottom = useDebounce(
     useCallback((entry: IntersectionObserverEntry) => {
@@ -1039,14 +1037,14 @@ export function RoomTimeline({
     }
   }, [scrollToElement, editId, scrollRef]);
 
-  const handleJumpToLatest = () => {
+  const handleJumpToLatest = useCallback(() => {
     if (eventId) {
       navigateRoom(room.roomId, undefined, { replace: true });
     }
     setTimeline(getInitialTimeline(room));
     scrollToBottomRef.current.count += 1;
     scrollToBottomRef.current.smooth = false;
-  };
+  }, [eventId, navigateRoom, room, setTimeline]);
 
   const handleJumpToUnread = () => {
     if (unreadInfo?.readUptoEventId) {
@@ -1055,9 +1053,20 @@ export function RoomTimeline({
     }
   };
 
-  const handleMarkAsRead = () => {
+  const handleMarkAsRead = useCallback(() => {
     markAsRead(mx, room.roomId, hideActivity);
-  };
+    setUnreadInfo(undefined);
+  }, [hideActivity, mx, room.roomId]);
+
+  const handleJumpToLatestAndRead = useCallback(() => {
+    handleJumpToLatest();
+    handleMarkAsRead();
+  }, [handleJumpToLatest, handleMarkAsRead]);
+
+  useEffect(() => {
+    if (!jumpToLatestAndReadRequest) return;
+    handleJumpToLatestAndRead();
+  }, [jumpToLatestAndReadRequest, handleJumpToLatestAndRead]);
 
   const handleOpenReply: MouseEventHandler = useCallback(
     async (evt) => {
@@ -1738,8 +1747,8 @@ export function RoomTimeline({
 
     const eventSender = mEvent.getSender();
 
-    if (!newDivider && readUptoEventIdRef.current) {
-      newDivider = prevEvent?.getId() === readUptoEventIdRef.current;
+    if (!newDivider && readUptoEventId) {
+      newDivider = prevEvent?.getId() === readUptoEventId;
     }
     if (!dayDivider) {
       dayDivider = prevEvent ? !inSameDay(prevEvent.getTs(), mEvent.getTs()) : false;

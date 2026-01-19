@@ -61,6 +61,7 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
   const roomViewRef = useRef<HTMLDivElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const [timelineNavMode, setTimelineNavMode] = useState(false);
+  const [jumpToLatestAndReadRequest, setJumpToLatestAndReadRequest] = useState(0);
 
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
 
@@ -102,6 +103,10 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
     });
   }, []);
 
+  const handleComposerEscape = useCallback(() => {
+    setJumpToLatestAndReadRequest((count) => count + 1);
+  }, []);
+
   useEffect(() => {
     setTimelineNavMode(false);
   }, [roomId, eventId]);
@@ -119,6 +124,7 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
           timelineNavMode={timelineNavMode}
           onExitTimelineNav={() => setTimelineNavMode(false)}
           timelineScrollRef={timelineScrollRef}
+          jumpToLatestAndReadRequest={jumpToLatestAndReadRequest}
         />
         <RoomViewTyping room={room} />
       </Box>
@@ -142,6 +148,7 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
                   timelineNavMode={timelineNavMode}
                   onEnterTimelineNav={enterTimelineNav}
                   onExitTimelineNav={() => setTimelineNavMode(false)}
+                  onEscapeToLatest={handleComposerEscape}
                 />
               )}
               {!canMessage && (
