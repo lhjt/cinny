@@ -21,6 +21,10 @@ export const useMessageLayoutItems = (): MessageLayoutItem[] =>
         layout: MessageLayout.Bubble,
         name: 'Bubble',
       },
+      {
+        layout: MessageLayout.BubbleInterlaced,
+        name: 'Bubbles (Interlaced)',
+      },
     ],
     []
   );

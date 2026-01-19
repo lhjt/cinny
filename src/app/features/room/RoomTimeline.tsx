@@ -1233,7 +1233,10 @@ export function RoomTimeline({
                 urlPreview={showUrlPreview}
                 htmlReactParserOptions={htmlReactParserOptions}
                 linkifyOpts={linkifyOpts}
-                outlineAttachment={messageLayout === MessageLayout.Bubble}
+                outlineAttachment={
+                  messageLayout === MessageLayout.Bubble ||
+                  messageLayout === MessageLayout.BubbleInterlaced
+                }
               />
             )}
           </Message>
@@ -1340,7 +1343,10 @@ export function RoomTimeline({
                       urlPreview={showUrlPreview}
                       htmlReactParserOptions={htmlReactParserOptions}
                       linkifyOpts={linkifyOpts}
-                      outlineAttachment={messageLayout === MessageLayout.Bubble}
+                      outlineAttachment={
+                        messageLayout === MessageLayout.Bubble ||
+                        messageLayout === MessageLayout.BubbleInterlaced
+                      }
                     />
                   );
                 }

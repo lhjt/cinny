@@ -7,6 +7,7 @@ export enum MessageLayout {
   Modern = 0,
   Compact = 1,
   Bubble = 2,
+  BubbleInterlaced = 3,
 }
 
 export interface Settings {

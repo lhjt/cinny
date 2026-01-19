@@ -33,7 +33,7 @@ export function EventContent({ messageLayout, time, iconSrc, content }: EventCon
   if (messageLayout === MessageLayout.Compact) {
     return <CompactLayout before={beforeJSX}>{msgContentJSX}</CompactLayout>;
   }
-  if (messageLayout === MessageLayout.Bubble) {
+  if (messageLayout === MessageLayout.Bubble || messageLayout === MessageLayout.BubbleInterlaced) {
     return (
       <BubbleLayout hideBubble before={beforeJSX}>
         {msgContentJSX}

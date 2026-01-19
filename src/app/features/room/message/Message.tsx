@@ -735,6 +735,9 @@ export const Message = as<'div', MessageProps>(
     const senderDisplayName =
       getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
     const senderAvatarMxc = getMemberAvatarMxc(room, senderId);
+    const isOwnMessage = senderId === mx.getUserId();
+    const isBubbleLayout =
+      messageLayout === MessageLayout.Bubble || messageLayout === MessageLayout.BubbleInterlaced;
 
     const tagColor = memberPowerTag?.color
       ? accessibleTagColors?.get(memberPowerTag.color)
@@ -761,13 +764,13 @@ export const Message = as<'div', MessageProps>(
             onContextMenu={onUserClick}
             onClick={onUsernameClick}
           >
-            <Text
-              as="span"
-              size={messageLayout === MessageLayout.Bubble ? 'T300' : 'T400'}
-              truncate
-            >
-              <UsernameBold>{senderDisplayName}</UsernameBold>
-            </Text>
+          <Text
+            as="span"
+            size={isBubbleLayout ? 'T300' : 'T400'}
+            truncate
+          >
+            <UsernameBold>{senderDisplayName}</UsernameBold>
+          </Text>
           </Username>
           {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
         </Box>
@@ -794,7 +797,7 @@ export const Message = as<'div', MessageProps>(
 
     const avatarJSX = !collapse && messageLayout !== MessageLayout.Compact && (
       <AvatarBase
-        className={messageLayout === MessageLayout.Bubble ? css.BubbleAvatarBase : undefined}
+        className={isBubbleLayout ? css.BubbleAvatarBase : undefined}
       >
         <Avatar
           className={css.MessageAvatar}
@@ -881,7 +884,7 @@ export const Message = as<'div', MessageProps>(
     return (
       <MessageBase
         className={classNames(css.MessageBase, className, {
-          [css.MessageBaseBubbleCollapsed]: messageLayout === MessageLayout.Bubble && collapse,
+          [css.MessageBaseBubbleCollapsed]: isBubbleLayout && collapse,
         })}
         tabIndex={0}
         space={messageSpacing}
@@ -1138,12 +1141,19 @@ export const Message = as<'div', MessageProps>(
             {msgContentJSX}
           </CompactLayout>
         )}
-        {messageLayout === MessageLayout.Bubble && (
-          <BubbleLayout before={avatarJSX} header={headerJSX} onContextMenu={handleContextMenu}>
+        {isBubbleLayout && (
+          <BubbleLayout
+            before={avatarJSX}
+            header={headerJSX}
+            align={
+              messageLayout === MessageLayout.BubbleInterlaced && isOwnMessage ? 'right' : 'left'
+            }
+            onContextMenu={handleContextMenu}
+          >
             {msgContentJSX}
           </BubbleLayout>
         )}
-        {messageLayout !== MessageLayout.Compact && messageLayout !== MessageLayout.Bubble && (
+        {messageLayout !== MessageLayout.Compact && !isBubbleLayout && (
           <ModernLayout before={avatarJSX} onContextMenu={handleContextMenu}>
             {headerJSX}
             {msgContentJSX}
