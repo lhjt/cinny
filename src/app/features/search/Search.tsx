@@ -59,6 +59,8 @@ import { useKeyDown } from '../../hooks/useKeyDown';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { KeySymbol } from '../../utils/key-symbol';
 import { isMacOS } from '../../utils/user-agent';
+import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
+import { roomHistoryAtom } from '../../state/room/roomHistory';
 
 enum SearchRoomType {
   Rooms = '#',
@@ -77,22 +79,49 @@ const useTopActiveRooms = (
   searchRoomType: SearchRoomType | undefined,
   rooms: string[],
   directs: string[],
-  spaces: string[]
+  spaces: string[],
+  selectedRoomId?: string,
+  previousRoomId?: string
 ) => {
   const mx = useMatrixClient();
 
   return useMemo(() => {
+    const maxItems = searchRoomType === SearchRoomType.Spaces ? undefined : 20;
+    let items: string[];
     if (searchRoomType === SearchRoomType.Spaces) {
-      return spaces;
+      items = spaces;
+    } else if (searchRoomType === SearchRoomType.Directs) {
+      items = [...directs].sort(factoryRoomIdByActivity(mx)).slice(0, 20);
+    } else if (searchRoomType === SearchRoomType.Rooms) {
+      items = [...rooms].sort(factoryRoomIdByActivity(mx)).slice(0, 20);
+    } else {
+      items = [...rooms, ...directs].sort(factoryRoomIdByActivity(mx)).slice(0, 20);
     }
-    if (searchRoomType === SearchRoomType.Directs) {
-      return [...directs].sort(factoryRoomIdByActivity(mx)).slice(0, 20);
+
+    let filteredItems = selectedRoomId
+      ? items.filter((roomId) => roomId !== selectedRoomId)
+      : items;
+
+    if (previousRoomId && previousRoomId !== selectedRoomId) {
+      const inScope =
+        (searchRoomType === SearchRoomType.Spaces && spaces.includes(previousRoomId)) ||
+        (searchRoomType === SearchRoomType.Directs && directs.includes(previousRoomId)) ||
+        (searchRoomType === SearchRoomType.Rooms && rooms.includes(previousRoomId)) ||
+        (searchRoomType === undefined &&
+          (rooms.includes(previousRoomId) || directs.includes(previousRoomId)));
+
+      if (inScope) {
+        filteredItems = [
+          previousRoomId,
+          ...filteredItems.filter((roomId) => roomId !== previousRoomId),
+        ];
+      }
     }
-    if (searchRoomType === SearchRoomType.Rooms) {
-      return [...rooms].sort(factoryRoomIdByActivity(mx)).slice(0, 20);
+    if (maxItems) {
+      return filteredItems.slice(0, maxItems);
     }
-    return [...rooms, ...directs].sort(factoryRoomIdByActivity(mx)).slice(0, 20);
-  }, [mx, rooms, directs, spaces, searchRoomType]);
+    return filteredItems;
+  }, [mx, rooms, directs, spaces, searchRoomType, selectedRoomId, previousRoomId]);
 };
 
 const getDmUserId = (
@@ -141,6 +170,8 @@ export function Search({ requestClose }: SearchProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { navigateRoom, navigateSpace } = useRoomNavigate();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const selectedRoomId = useSelectedRoom();
+  const roomHistory = useAtomValue(roomHistoryAtom);
 
   const [searchRoomType, setSearchRoomType] = useState<SearchRoomType>();
 
@@ -154,7 +185,14 @@ export function Search({ requestClose }: SearchProps) {
   const spaces = useSpaces(mx, allRoomsAtom);
   const directs = useDirects(mx, allRoomsAtom, mDirects);
 
-  const topActiveRooms = useTopActiveRooms(searchRoomType, rooms, directs, spaces);
+  const topActiveRooms = useTopActiveRooms(
+    searchRoomType,
+    rooms,
+    directs,
+    spaces,
+    selectedRoomId,
+    roomHistory.history[0]
+  );
   const targetRooms = useSearchTargetRooms(searchRoomType, rooms, directs, spaces);
 
   const getTargetStr: SearchItemStrGetter<string> = useCallback(
