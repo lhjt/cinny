@@ -353,6 +353,7 @@ const useTimelinePagination = (
 
 const useLiveEventArrive = (room: Room, onArrive: (mEvent: MatrixEvent) => void) => {
   useEffect(() => {
+    // Clear timeline selection when the composer regains focus.
     const handleTimelineEvent: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
       mEvent,
       eventRoom,
@@ -688,6 +689,28 @@ export function RoomTimeline({
     },
     selectionActions
   );
+
+  useEffect(() => {
+    const inputEl = roomInputRef.current;
+    if (!inputEl) return;
+
+    const handleInputFocus = () => {
+      if (selectedEventId) {
+        setSelectedEventId(undefined);
+      }
+      if (timelineNavMode) {
+        onExitTimelineNav();
+      }
+    };
+
+    inputEl.addEventListener('focusin', handleInputFocus);
+    inputEl.addEventListener('pointerdown', handleInputFocus);
+
+    return () => {
+      inputEl.removeEventListener('focusin', handleInputFocus);
+      inputEl.removeEventListener('pointerdown', handleInputFocus);
+    };
+  }, [roomInputRef, selectedEventId, setSelectedEventId, timelineNavMode, onExitTimelineNav]);
 
   const loadEventTimeline = useEventTimelineLoader(
     mx,
