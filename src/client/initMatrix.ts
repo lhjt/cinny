@@ -1,4 +1,10 @@
-import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from 'matrix-js-sdk';
+import {
+  createClient,
+  MatrixClient,
+  IndexedDBStore,
+  IndexedDBCryptoStore,
+  SetPresence,
+} from 'matrix-js-sdk';
 
 import { cryptoCallbacks } from './secretStorageKeys';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
@@ -43,6 +49,7 @@ export const startClient = async (mx: MatrixClient) => {
   await mx.startClient({
     lazyLoadMembers: true,
   });
+  await mx.setSyncPresence(SetPresence.Online);
 };
 
 export const clearCacheAndReload = async (mx: MatrixClient) => {

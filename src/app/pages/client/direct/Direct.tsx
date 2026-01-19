@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
+import React, { MouseEventHandler, forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import {
   Avatar,
@@ -18,6 +18,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import FocusTrap from 'focus-trap-react';
 import { useNavigate } from 'react-router-dom';
+import { RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { factoryRoomIdByActivity } from '../../../utils/sort';
 import {
@@ -180,8 +181,28 @@ export function Direct() {
   const createDirectSelected = useDirectCreateSelected();
 
   const selectedRoomId = useSelectedRoom();
+  const [activityTick, setActivityTick] = useState(0);
   const noRoomToDisplay = directs.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
+  const directRoomIds = useMemo(() => new Set(directs), [directs]);
+
+  useEffect(() => {
+    const handleTimelineEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
+      _event,
+      room,
+      _toStartOfTimeline,
+      removed,
+      data
+    ) => {
+      if (!room || removed || !data?.liveEvent) return;
+      if (!directRoomIds.has(room.roomId)) return;
+      setActivityTick((tick) => tick + 1);
+    };
+    mx.on(RoomEvent.Timeline, handleTimelineEvent);
+    return () => {
+      mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
+    };
+  }, [mx, directRoomIds]);
 
   const sortedDirects = useMemo(() => {
     const items = Array.from(directs).sort(factoryRoomIdByActivity(mx));
@@ -189,7 +210,7 @@ export function Direct() {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
-  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId]);
+  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId, activityTick]);
 
   const virtualizer = useVirtualizer({
     count: sortedDirects.length,
