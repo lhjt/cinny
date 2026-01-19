@@ -1,50 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
-import { User, UserEvent, UserEventHandlerMap } from 'matrix-js-sdk';
-import { useMatrixClient } from './useMatrixClient';
+import { useCallback, useMemo } from 'react';
+import { useAtomValue } from 'jotai';
+import { selectAtom } from 'jotai/utils';
+import { presenceEqual, userPresenceAtom, UserPresenceMap } from '../state/presence';
+import { Presence, UserPresence } from '../types/presence';
 
-export enum Presence {
-  Online = 'online',
-  Unavailable = 'unavailable',
-  Offline = 'offline',
-}
-
-export type UserPresence = {
-  presence: Presence;
-  status?: string;
-  active: boolean;
-  lastActiveTs?: number;
+const comparePresenceEqual = (a?: UserPresence, b?: UserPresence): boolean => {
+  if (!a || !b) return a === b;
+  return presenceEqual(a, b);
 };
 
-const getUserPresence = (user: User): UserPresence => ({
-  presence: user.presence as Presence,
-  status: user.presenceStatusMsg,
-  active: user.currentlyActive,
-  lastActiveTs: user.getLastActiveTs(),
-});
-
 export const useUserPresence = (userId: string): UserPresence | undefined => {
-  const mx = useMatrixClient();
-  const user = mx.getUser(userId);
+  const selector = useCallback(
+    (presences: UserPresenceMap) => presences.get(userId),
+    [userId]
+  );
+  return useAtomValue(selectAtom(userPresenceAtom, selector, comparePresenceEqual));
+};
 
-  const [presence, setPresence] = useState(() => (user ? getUserPresence(user) : undefined));
-
-  useEffect(() => {
-    const updatePresence: UserEventHandlerMap[UserEvent.Presence] = (event, u) => {
-      if (u.userId === user?.userId) {
-        setPresence(getUserPresence(user));
-      }
-    };
-    user?.on(UserEvent.Presence, updatePresence);
-    user?.on(UserEvent.CurrentlyActive, updatePresence);
-    user?.on(UserEvent.LastPresenceTs, updatePresence);
-    return () => {
-      user?.removeListener(UserEvent.Presence, updatePresence);
-      user?.removeListener(UserEvent.CurrentlyActive, updatePresence);
-      user?.removeListener(UserEvent.LastPresenceTs, updatePresence);
-    };
-  }, [user]);
-
-  return presence;
+export const useRenderablePresence = (userId: string): UserPresence | undefined => {
+  const presence = useUserPresence(userId);
+  return presence && presence.lastActiveTs !== 0 ? presence : undefined;
 };
 
 export const usePresenceLabel = (): Record<Presence, string> =>

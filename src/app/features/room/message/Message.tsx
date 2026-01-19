@@ -69,11 +69,13 @@ import { EmojiBoard } from '../../../components/emoji-board';
 import { ReactionViewer } from '../reaction-viewer';
 import { MessageEditor } from './MessageEditor';
 import { UserAvatar } from '../../../components/user-avatar';
+import { AvatarPresence, PresenceBadge } from '../../../components/presence';
 import { copyToClipboard } from '../../../utils/dom';
 import { stopPropagation } from '../../../utils/keyboard';
 import { getMatrixToRoomEvent } from '../../../plugins/matrix-to';
 import { getViaServers } from '../../../plugins/via-servers';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
+import { useRenderablePresence } from '../../../hooks/useUserPresence';
 import { useRoomPinnedEvents } from '../../../hooks/useRoomPinnedEvents';
 import { MemberPowerTag, StateEvent } from '../../../../types/matrix/room';
 import { PowerIcon } from '../../../components/power';
@@ -735,6 +737,7 @@ export const Message = as<'div', MessageProps>(
     const senderDisplayName =
       getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
     const senderAvatarMxc = getMemberAvatarMxc(room, senderId);
+    const showPresence = useRenderablePresence(senderId);
     const isOwnMessage = senderId === mx.getUserId();
     const isBubbleLayout =
       messageLayout === MessageLayout.Bubble || messageLayout === MessageLayout.BubbleInterlaced;
@@ -796,27 +799,38 @@ export const Message = as<'div', MessageProps>(
     );
 
     const avatarJSX = !collapse && messageLayout !== MessageLayout.Compact && (
-      <AvatarBase
-        className={isBubbleLayout ? css.BubbleAvatarBase : undefined}
-      >
-        <Avatar
-          className={css.MessageAvatar}
-          as="button"
-          size="300"
-          data-user-id={senderId}
-          onClick={onUserClick}
+      <AvatarBase className={isBubbleLayout ? css.BubbleAvatarBase : undefined}>
+        <AvatarPresence
+          badge={
+            showPresence && (
+              <PresenceBadge
+                presence={showPresence.presence}
+                status={showPresence.status}
+                size="200"
+              />
+            )
+          }
         >
-          <UserAvatar
-            userId={senderId}
-            src={
-              senderAvatarMxc
-                ? mxcUrlToHttp(mx, senderAvatarMxc, useAuthentication, 48, 48, 'crop') ?? undefined
-                : undefined
-            }
-            alt={senderDisplayName}
-            renderFallback={() => <Icon size="200" src={Icons.User} filled />}
-          />
-        </Avatar>
+          <Avatar
+            className={css.MessageAvatar}
+            as="button"
+            size="300"
+            data-user-id={senderId}
+            onClick={onUserClick}
+          >
+            <UserAvatar
+              userId={senderId}
+              src={
+                senderAvatarMxc
+                  ? mxcUrlToHttp(mx, senderAvatarMxc, useAuthentication, 48, 48, 'crop') ??
+                    undefined
+                  : undefined
+              }
+              alt={senderDisplayName}
+              renderFallback={() => <Icon size="200" src={Icons.User} filled />}
+            />
+          </Avatar>
+        </AvatarPresence>
       </AvatarBase>
     );
 

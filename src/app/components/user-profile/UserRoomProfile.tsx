@@ -8,7 +8,7 @@ import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { useRoom } from '../../hooks/useRoom';
-import { useUserPresence } from '../../hooks/useUserPresence';
+import { useRenderablePresence } from '../../hooks/useUserPresence';
 import { IgnoredUserAlert, MutualRoomsChip, OptionsChip, ServerChip, ShareChip } from './UserChips';
 import { useCloseUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { PowerChip } from './PowerChip';
@@ -57,7 +57,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
   const avatarMxc = getMemberAvatarMxc(room, userId);
   const avatarUrl = (avatarMxc && mxcUrlToHttp(mx, avatarMxc, useAuthentication)) ?? undefined;
 
-  const presence = useUserPresence(userId);
+  const presence = useRenderablePresence(userId);
 
   const handleMessage = () => {
     closeUserRoomProfile();
@@ -72,7 +72,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
       <UserHero
         userId={userId}
         avatarUrl={avatarUrl}
-        presence={presence && presence.lastActiveTs !== 0 ? presence : undefined}
+        presence={presence}
       />
       <Box direction="Column" gap="500" style={{ padding: config.space.S400 }}>
         <Box direction="Column" gap="400">
