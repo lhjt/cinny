@@ -801,6 +801,7 @@ export const Message = as<'div', MessageProps>(
     const avatarJSX = !collapse && messageLayout !== MessageLayout.Compact && (
       <AvatarBase className={isBubbleLayout ? css.BubbleAvatarBase : undefined}>
         <AvatarPresence
+          as="span"
           badge={
             showPresence && (
               <PresenceBadge

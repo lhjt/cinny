@@ -163,6 +163,8 @@ export const BubbleBeforeAlign = styleVariants({
 export const BubbleBody = style({
   display: 'flex',
   flexDirection: 'column',
+  minWidth: 0,
+  maxWidth: '100%',
 });
 
 export const BubbleBodyAlign = styleVariants({
@@ -175,12 +177,30 @@ export const BubbleBodyAlign = styleVariants({
 });
 
 export const BubbleContent = style({
-  maxWidth: toRem(800),
+  maxWidth: `min(100%, ${toRem(800)})`,
+  width: 'fit-content',
+  minWidth: 0,
   padding: config.space.S200,
   backgroundColor: color.SurfaceVariant.Container,
   color: color.SurfaceVariant.OnContainer,
   borderRadius: config.radii.R500,
   position: 'relative',
+});
+
+export const BubbleContentContainer = style({
+  display: 'flex',
+  alignSelf: 'stretch',
+  maxWidth: '100%',
+  minWidth: 0,
+});
+
+export const BubbleContentContainerAlign = styleVariants({
+  left: {
+    justifyContent: 'flex-start',
+  },
+  right: {
+    justifyContent: 'flex-end',
+  },
 });
 
 export const BubbleContentArrowLeft = style({
